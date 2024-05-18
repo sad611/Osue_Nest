@@ -10,10 +10,10 @@ import {
   useQueue,
   useTimeline,
 } from 'discord-player';
-import { MusicQuery } from './options/music-query.dto';
-import { Client } from 'discord.js';
+import { LoopDto, MusicQueryDto } from './options/dto';
+import { Client, TextChannel } from 'discord.js';
 import { YoutubeExtractor, YouTubeExtractor } from '@discord-player/extractor';
-import { StringMenuInterceptor } from '../components/string-menu/string-menu.service';
+import { EngineMenuInterceptor, LoopMenuInterceptor } from './options/menu.interceptor';
 import { EmbedService } from '../embed/embed.service';
 import { EmbedInteractionService } from '../embed/embed-interaction/embed-interaction.service';
 
@@ -24,14 +24,9 @@ const UtilsCommands = createCommandGroupDecorator({
   description: 'music',
 });
 
-// loop || da musica ou da queue
-// queue
 // ilter
-// pause
-// resume
 // dc
 // move
-// shuffle
 // bota no biotao
 // botar musica que vai tocar
 
@@ -40,22 +35,38 @@ const UtilsCommands = createCommandGroupDecorator({
 export class MusicService {
   private player: Player;
   private logger: Logger;
-  constructor(
-    private client: Client,
-    private embedService: EmbedService,
-    private embedInteraction: EmbedInteractionService,
-  ) {
+  constructor(client: Client, private embedService: EmbedService, private embedInteraction: EmbedInteractionService) {
     this.player = new Player(client);
+
+    this.player.events.on('playerStart', (queue, track) => {
+      console.log(track.title)
+      const embed = embedService.Info({
+        title: `Now Playing!`,
+        thumbnail: { url: track.thumbnail },
+        description: `[${track.title}](${track.url})`,
+        fields: [
+          { name: 'Author', value: `${track.author}`, inline: true },
+          { name: '', value: ``, inline: true },
+          { name: 'Duration', value: `${track.duration}`, inline: true },
+        ],
+      });
+
+      const channel = queue.metadata.textChannel as TextChannel;
+      channel.send({embeds: [embed]})
+    });
+
+    this.player.events.on('playerError', (queue, error) => {
+      console.log(error);
+    });
   }
-  @UseInterceptors(StringMenuInterceptor)
+  @UseInterceptors(EngineMenuInterceptor)
   @Subcommand({ name: 'play', description: 'Queues a music' })
-  public async playMusic(@Context() [interaction]: SlashCommandContext, @Options() { query, engine }: MusicQuery) {
+  public async playMusic(@Context() [interaction]: SlashCommandContext, @Options() { query, engine }: MusicQueryDto) {
     try {
       const member = await interaction.guild.members.fetch(interaction.user.id);
       const channel = member.voice.channel;
 
       if (!channel) return;
-
       if (!choicesSet.has(engine)) engine = 'autoSearch';
 
       await interaction.deferReply({ ephemeral: true });
@@ -67,7 +78,17 @@ export class MusicService {
 
       if (!this.player.queues.get(interaction.guild)) this.player.queues.create(interaction.guild);
 
+      const queue = this.player.queues.get(interaction.guild) || this.player.queues.create(interaction.guild, {
+        metadata: {
+          channel: interaction.channel,
+        },
+      });
+
+      queue.setMetadata({textChannel: interaction.channel})
+
+
       const { track } = await this.player.play(channel, result, {
+        
         searchEngine: engine,
         nodeOptions: {
           metadata: interaction,
@@ -98,7 +119,7 @@ export class MusicService {
         })
         .withAuthor(interaction.user);
 
-      interaction.followUp({ embeds: [embed] });
+      return interaction.followUp({ embeds: [embed] });
     } catch (err) {
       this.logger.log(err);
     }
@@ -108,7 +129,7 @@ export class MusicService {
   public async nowMusic(@Context() [interaction]: SlashCommandContext) {
     if (!interaction.inCachedGuild()) return;
 
-    await interaction.deferReply();
+    await interaction.deferReply({ephemeral: true});
 
     const queue = useQueue(interaction.guildId);
 
@@ -120,7 +141,7 @@ export class MusicService {
 
     const track = queue.currentTrack;
     const progressBar = queueNode.createProgressBar();
-    
+
     const embed = this.embedService
       .Info({
         title: 'Now Playing',
@@ -134,7 +155,7 @@ export class MusicService {
       })
       .withAuthor(interaction.user);
 
-    interaction.followUp({ embeds: [embed], ephemeral: true });
+    return interaction.followUp({ embeds: [embed], ephemeral: true });
   }
 
   @Subcommand({ name: 'skip', description: 'Skips the currently playing song' })
@@ -152,7 +173,7 @@ export class MusicService {
 
     queue.node.skip();
 
-    interaction.followUp({ content: `Song skipped: ${timeline.track.title}` });
+    return interaction.followUp({ content: `Song skipped: ${timeline.track.title}`, ephemeral: true });
   }
 
   @Subcommand({ name: 'queue', description: 'Display this guild music queue' })
@@ -162,5 +183,97 @@ export class MusicService {
     if (!queue) return interaction.followUp({ content: 'There is no music in the queue', ephemeral: true });
     const tracks = queue.tracks;
     await this.embedInteraction.handleInteractionQueue(interaction, tracks.toArray());
+  }
+
+  @UseInterceptors(LoopMenuInterceptor)
+  @Subcommand({ name: 'loop', description: 'Loops queue or current song' })
+  public async loopMusic(@Context() [interaction]: SlashCommandContext, @Options() { loop }: LoopDto) {
+    const queue = useQueue(interaction.guild);
+
+    await interaction.deferReply({ ephemeral: true });
+    if (!queue?.isPlaying()) {
+      const embed = this.embedService.Info({ title: 'Not playing', description: `I'm currently not playing anything` });
+      return interaction.followUp({ embeds: [embed], ephemeral: true });
+    }
+
+    if (!loop) loop = QueueRepeatMode.QUEUE;
+
+    if (queue?.repeatMode !== QueueRepeatMode.OFF) loop = QueueRepeatMode.OFF;
+
+    queue.setRepeatMode(loop);
+    const embed = this.embedService.Info({ title: 'Loop', description: `Loop mode is ${QueueRepeatMode[loop]}` });
+
+    return interaction.followUp({ embeds: [embed], ephemeral: true });
+  }
+
+  @Subcommand({ name: 'pause', description: 'Pauses the player' })
+  public async pauseMusic(@Context() [interaction]: SlashCommandContext) {
+    const queue = useQueue(interaction.guild);
+
+    await interaction.deferReply({ ephemeral: true });
+
+    if (!queue?.isPlaying()) {
+      const embed = this.embedService.Info({ title: 'Not playing', description: `I'm currently not playing anything` });
+      return interaction.followUp({ embeds: [embed], ephemeral: true });
+    }
+
+    const timeline = useTimeline(interaction.guild);
+    const isPaused = timeline.paused;
+
+    if (isPaused) {
+      timeline.resume();
+    } else {
+      timeline.pause();
+    }
+
+    const action = isPaused ? 'Resumed' : 'Paused';
+    const embed = this.embedService.Info({ title: action }).withAuthor(interaction.user);
+
+    return interaction.followUp({ embeds: [embed], ephemeral: true });
+  }
+
+  @Subcommand({ name: 'resume', description: 'Resumes the player' })
+  public async resumeMusic(@Context() [interaction]: SlashCommandContext) {
+    const queue = useQueue(interaction.guild);
+
+    await interaction.deferReply({ ephemeral: true });
+
+    if (!queue?.isPlaying()) {
+      const embed = this.embedService.Info({ title: 'Not playing', description: `I'm currently not playing anything` });
+      return interaction.followUp({ embeds: [embed], ephemeral: true });
+    }
+
+    const timeline = useTimeline(interaction.guild);
+
+    if (!timeline.paused) {
+      const embed = this.embedService.Info({ title: `I'm already playing` }).withAuthor(interaction.user);
+      return interaction.followUp({ embeds: [embed], ephemeral: true });
+    }
+
+    timeline.resume();
+    const embed = this.embedService.Info({ title: 'Resumed' }).withAuthor(interaction.user);
+
+    return interaction.followUp({ embeds: [embed], ephemeral: true });
+  }
+
+  @Subcommand({ name: 'shuffle', description: 'Shuffles the queue' })
+  public async shuffleMusic(@Context() [interaction]: SlashCommandContext) {
+    const queue = useQueue(interaction.guild);
+
+    await interaction.deferReply({ ephemeral: true });
+
+    if (!queue?.tracks) {
+      const embed = this.embedService.Info({
+        title: 'Empty queue',
+        description: `There's no tracks in the queue to shuffle`,
+      });
+      return interaction.followUp({ embeds: [embed], ephemeral: true });
+    }
+
+    queue.enableShuffle(false);
+
+    const embed = this.embedService.Info({ title: 'Queue shuffled' }).withAuthor(interaction.user);
+
+    return interaction.followUp({ embeds: [embed], ephemeral: true });
   }
 }
