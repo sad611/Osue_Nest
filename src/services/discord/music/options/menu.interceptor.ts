@@ -15,13 +15,6 @@ export class EngineMenuInterceptor extends AutocompleteInterceptor {
     ];
 
     const filteredChoices = choices.filter((choice) => choice.name.toLowerCase().includes(focused.value.toLowerCase()));
-    console.log("*****\n",
-      filteredChoices.map((choice) => ({
-        name: choice.name,
-        value: choice.value,
-      })),
-    );
-    console.log(filteredChoices, "*****\n")
     return interaction.respond(
       filteredChoices
       ,

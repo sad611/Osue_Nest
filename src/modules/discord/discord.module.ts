@@ -16,6 +16,7 @@ import { LavalinkManager } from "lavalink-client";
 import { LavalinkModule } from "../lavalink/lavalink.module";
 import { EmbedService } from "../../services/discord/embed/embed.service";
 import { EmbedInteractionService } from "../../services/discord/embed/embed-interaction/embed-interaction.service";
+import { MenuService } from "../../services/discord/components/menu/menu.service";
 
 @Module({
   imports: [
@@ -41,7 +42,7 @@ import { EmbedInteractionService } from "../../services/discord/embed/embed-inte
     }),
     LavalinkModule
   ],
-  providers: [DiscordService, InteractionService, BirthdayService, MusicService, EmbedService, EmbedInteractionService],
+  providers: [DiscordService, InteractionService, BirthdayService, MusicService, EmbedService, EmbedInteractionService, MenuService],
   exports: [InteractionService],
 })
 export class DiscordModule {}

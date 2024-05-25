@@ -1,9 +1,9 @@
 import { QueueRepeatMode, SearchQueryType } from 'discord-player';
-import { StringOption } from 'necord';
+import { BooleanOption, NumberOption, StringOption } from 'necord';
 
 export class MusicQueryDto {
     @StringOption({
-        name: 'query',
+        name: 'name',
         description: 'Video to play',
         required: true
     })
@@ -23,4 +23,27 @@ export class LoopDto {
         autocomplete: true
     })
     loop: QueueRepeatMode;
+}
+
+
+export class MoveDto {
+    @NumberOption({
+        name: 'from',
+        description: 'Index of track to move',
+        required: true
+    })
+    from: number;
+    @NumberOption({
+        name: 'to',
+        description: 'Target to move track',
+    })
+    to: number;
+}
+
+export class LyricsDto {
+    @StringOption({
+        name: 'song',
+        description: 'Song to search lyrics, if none passed returns lyrics from current track',
+    })
+    query: string;
 }
