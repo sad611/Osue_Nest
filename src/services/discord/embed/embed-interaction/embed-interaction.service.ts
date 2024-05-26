@@ -38,14 +38,24 @@ export class EmbedInteractionService {
   }
 
   public async handleInteractionQueue(
-    interaction: ChatInputCommandInteraction<CacheType>,
+    channel: GuildTextBasedChannel,
     queue: GuildQueue<any>,
     tracks: any,
   ): Promise<void> {
+    if (queue.tracks.size === 0) {
+      const embed = this.embedService.Info({
+        title: 'Queue!',
+        description: 'There is currently no track on the queue',
+      });
+      await channel.send({ embeds: [embed] });
+      return;
+    }
+
     let curPage = 1;
     const sliceLength = 10;
 
     const page = this.paginateArray(tracks, sliceLength, curPage);
+
     const description = this.createQueuePageDescription(page, curPage);
 
     const embed = this.embedService.Info({ title: 'Queue!', description: description }).setFooter({
@@ -54,7 +64,7 @@ export class EmbedInteractionService {
       }`,
     });
     const row = this.createButtonRowQueue(curPage, tracks.length, sliceLength);
-    const interactionResponse = await interaction.followUp({ embeds: [embed], components: [row], ephemeral: true });
+    const interactionResponse = await channel.send({ embeds: [embed], components: [row] });
 
     const collector = interactionResponse.createMessageComponentCollector({ idle: 15000, time: 30000 });
 
@@ -78,16 +88,16 @@ export class EmbedInteractionService {
   }
 
   public async handleInteractionGeneral(
-    interaction: ChatInputCommandInteraction<CacheType>,
+    channel: GuildTextBasedChannel,
     queue: GuildQueue<any>,
     embed: EmbedService,
     duration: number,
   ) {
     const row = this.createButtonRowGeneral();
-    const message = await interaction.followUp({ embeds: [embed], components: [row] });
+    const message = await channel.send({ embeds: [embed], components: [row] });
     const collector = message.createMessageComponentCollector({ idle: duration, time: duration });
-    const timeline = useTimeline(interaction.guild.id);
-    queue.setMetadata({ interaction: interaction, message: message });
+    const timeline = useTimeline(channel.guild.id);
+    queue.setMetadata({ channel: channel, message: message });
     collector.on('collect', async (e) => {
       switch (e.customId) {
         case 'skip-track':
@@ -104,7 +114,7 @@ export class EmbedInteractionService {
           break;
         case 'queue':
           await e.update({ embeds: [embed], components: [row] });
-          this.handleInteractionQueue(interaction, queue, queue.tracks.toArray());
+          this.handleInteractionQueue(channel, queue, queue.tracks.toArray());
           break;
 
         case 'loop':
@@ -120,8 +130,6 @@ export class EmbedInteractionService {
           await e.update({ embeds: [embed], components: [row] });
           break;
       }
-
-      e.update({ embeds: [embed], components: [row] });
     });
   }
 
@@ -151,7 +159,7 @@ export class EmbedInteractionService {
     return tracks
       .map((track, index) => {
         const { title, url, requestedBy, duration } = track;
-        return `${index + 1 + (curPage - 1) * 10}. [${title}](${url}) - ${duration} (requested by ${requestedBy?.tag})`;
+        return `${index + 1 + (curPage - 1) * 10}. [${title}](${url}) - ${duration} requested by ${requestedBy}`;
       })
       .join('\n');
   }

@@ -58,9 +58,9 @@ export class MusicService {
         embed.setFooter({ text: 'Queue is in loop' });
       }
 
-      const { interaction } = queue.metadata;
+      const channel = queue.metadata.channel as GuildTextBasedChannel;
 
-      this.embedInteraction.handleInteractionGeneral(interaction, queue, embed, track.durationMS);
+      this.embedInteraction.handleInteractionGeneral(channel, queue, embed, track.durationMS);
     });
 
     this.player.events.on('playerError', (queue, error) => {
@@ -96,16 +96,16 @@ export class MusicService {
 
       const queue =
         this.player.queues.get(interaction.guild) ||
-        this.player.queues.create(interaction.guild, { metadata: { interaction: interaction } });
+        this.player.queues.create(interaction.guild, { metadata: { channel: interaction.channel } });
 
       const { track } = await this.player.play(channel, result, {
         searchEngine: engine,
         nodeOptions: {
           noEmitInsert: true,
-          leaveOnStop: false,
           preferBridgedMetadata: true,
           disableBiquad: true,
           leaveOnEnd: false,
+          leaveOnStop: false,
           leaveOnEmpty: false,
         },
         connectionOptions: {
@@ -200,7 +200,7 @@ export class MusicService {
 
     if (!queue) return interaction.followUp({ content: 'There is no music in the queue', ephemeral: true });
     const tracks = queue.tracks;
-    await this.embedInteraction.handleInteractionQueue(interaction, queue, tracks.toArray());
+    await this.embedInteraction.handleInteractionQueue(interaction.channel, queue, tracks.toArray());
   }
 
   @UseInterceptors(LoopMenuInterceptor)
@@ -272,7 +272,7 @@ export class MusicService {
     timeline.resume();
     const embed = this.embedService.Info({ title: 'Resumed' }).withAuthor(interaction.user);
 
-    this.embedInteraction.handleInteractionGeneral(interaction, queue, embed, timeline.track.durationMS);
+    this.embedInteraction.handleInteractionGeneral(interaction.channel, queue, embed, timeline.track.durationMS);
   }
 
   @Subcommand({ name: 'shuffle', description: 'Shuffles the queue' })
@@ -356,9 +356,11 @@ export class MusicService {
         })
         .withAuthor(interaction.user);
 
-      return interaction.editReply({ embeds: [embed] });
+      return interaction.followUp({ embeds: [embed] });
     }
 
+    const connection = this.player.voiceUtils.getConnection(interaction.guild.id)
+    this.player.voiceUtils.disconnect(connection)
     queue.delete();
 
     const embed = this.embedService
@@ -368,7 +370,7 @@ export class MusicService {
       })
       .withAuthor(interaction.user);
 
-    return interaction.editReply({ embeds: [embed] });
+    return interaction.followUp({ embeds: [embed] });
   }
 
   @Subcommand({ name: 'clear', description: 'Clear the queue' })
@@ -453,7 +455,7 @@ export class MusicService {
 
         const queue =
           this.player.queues.get(interaction.guild) ||
-          this.player.queues.create(interaction.guild, { metadata: { interaction: interaction } });
+          this.player.queues.create(interaction.guild, { metadata: { channel: channel } });
 
         const { track } = await this.player.play(channel, selectedTrack, {
           searchEngine: engine,
@@ -567,7 +569,7 @@ export class MusicService {
     }
 
     const queue = useQueue(interaction.guild);
-    console.log(queue?.isPlaying)
+    console.log(queue?.isPlaying);
     if (queue?.isPlaying) {
       const embed = this.embedService.Info({
         title: 'Already playing in another channel',
@@ -575,7 +577,7 @@ export class MusicService {
       return interaction.followUp({ embeds: [embed], ephemeral: true });
     }
 
-    this.player.voiceUtils.join(member.voice.channel, {deaf: true});
+    this.player.voiceUtils.join(member.voice.channel, { deaf: true });
 
     const embed = this.embedService.Info({ title: `Joined ${member.voice.channel}!` });
     return interaction.followUp({ embeds: [embed], ephemeral: true });
