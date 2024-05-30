@@ -28,6 +28,7 @@ export class RoleService {
     @Context() [interaction]: SlashCommandContext,
     @Options() { roleName, colorHex }: RoleSetDto,
   ) {
+    await interaction.deferReply();
     const rgb = this.colorService.hexToRGB(colorHex);
 
     if (!rgb) {
@@ -77,6 +78,7 @@ export class RoleService {
 
   @Subcommand({ name: 'remove', description: 'Remove color from user' })
   public async removeRole(@Context() [interaction]: SlashCommandContext, @Options() { roleName }: RoleGetDto) {
+    await interaction.deferReply();
     try {
       const member = await interaction.guild.members.fetch(interaction.member.user.id);
       const roleToRemove = member.roles.cache.find((role) => role.name === roleName);
@@ -96,6 +98,7 @@ export class RoleService {
 
   @Subcommand({ name: 'list', description: 'Retuns a color list of this server' })
   public async listRole(@Context() [interaction]: SlashCommandContext) {
+    await interaction.deferReply();
     const roles = await this.mongoService.getRolesByGuildID(interaction.guild.id);
     const sliceLength = 30;
     const slicedRoles = roles.slice(0, sliceLength);
@@ -105,6 +108,7 @@ export class RoleService {
 
   @Subcommand({ name: 'get', description: 'Choose a color to get' })
   public async getRole(@Context() [interaction]: SlashCommandContext, @Options() { roleName }: RoleGetDto) {
+    await interaction.deferReply();
     try {
       const guildID = interaction.guild.id;
       const memberID = interaction.user.id;
@@ -126,6 +130,7 @@ export class RoleService {
 
   @Subcommand({ name: 'delete', description: 'Deletes color from server' })
   public async deleteRole(@Context() [interaction]: SlashCommandContext, @Options() { roleName }: RoleGetDto) {
+    await interaction.deferReply();
     try {
       const member = await interaction.guild.members.fetch(interaction.user.id);
 
