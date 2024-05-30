@@ -1,0 +1,19 @@
+version: 0.2
+phases:
+  install:
+    commands:
+      - npm install
+  build:
+    commands:
+      - npm run build
+  post_build:
+    commands:
+      - printenv > .env
+      - cp .env dist/.env
+      - cp -R node_modules/ dist/node_modules
+      - cp Procfile dist/Procfile
+
+artifacts:
+  files:
+    - 'dist/**'
+  discard-paths: no
