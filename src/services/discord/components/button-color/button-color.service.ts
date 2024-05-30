@@ -25,7 +25,7 @@ export class ButtonColorService {
 
     this.row = this.createButtonRow(curPage, roles.length, sliceLength);
     this.image = await this.canvasService.createColorNamesImage(roles);
-    const interactionResponse = await interaction.reply({
+    const interactionResponse = await interaction.followUp({
       files: [this.image],
       components: [this.row],
       ephemeral: true,

@@ -32,12 +32,12 @@ export class RoleService {
     const rgb = this.colorService.hexToRGB(colorHex);
 
     if (!rgb) {
-      return interaction.reply({ content: `Invalid hex ${colorHex}, must be a #XXXXXX`, ephemeral: true });
+      return interaction.followUp({ content: `Invalid hex ${colorHex}, must be a #XXXXXX`, ephemeral: true });
     }
 
     const roles = await interaction.guild.roles.fetch();
     if (roles.find((role) => role.name === roleName)) {
-      return interaction.reply({ content: 'There already exists a role with that name', ephemeral: true });
+      return interaction.followUp({ content: 'There already exists a role with that name', ephemeral: true });
     }
 
     let createdRole: any;
@@ -50,7 +50,7 @@ export class RoleService {
       });
 
       if (!createdRole) {
-        return interaction.reply({ content: 'There was an error creating the role', ephemeral: true });
+        return interaction.followUp({ content: 'There was an error creating the role', ephemeral: true });
       }
 
       await this.mongoService.saveRole(
@@ -59,7 +59,7 @@ export class RoleService {
         { name: interaction.user.username, ID: interaction.user.id },
       );
 
-      return interaction.reply({ content: `Role created successfully (${roleName}, ${colorHex})`, ephemeral: true });
+      return interaction.followUp({ content: `Role created successfully (${roleName}, ${colorHex})`, ephemeral: true });
     } catch (error) {
       this.logger.error('Error creating or saving role:', error);
 
@@ -72,7 +72,7 @@ export class RoleService {
         }
       }
 
-      return interaction.reply({ content: 'Failed to create role', ephemeral: true });
+      return interaction.followUp({ content: 'Failed to create role', ephemeral: true });
     }
   }
 
@@ -84,15 +84,15 @@ export class RoleService {
       const roleToRemove = member.roles.cache.find((role) => role.name === roleName);
 
       if (!roleToRemove) {
-        return interaction.reply({ content: 'Role not found', ephemeral: true });
+        return interaction.followUp({ content: 'Role not found', ephemeral: true });
       }
 
       await member.roles.remove(roleToRemove);
 
-      interaction.reply({ content: 'Role removed successfully', ephemeral: true });
+      interaction.followUp({ content: 'Role removed successfully', ephemeral: true });
     } catch (error) {
       console.error('Error removing role:', error);
-      interaction.reply({ content: 'Failed to remove role', ephemeral: true });
+      interaction.followUp({ content: 'Failed to remove role', ephemeral: true });
     }
   }
 
@@ -116,15 +116,15 @@ export class RoleService {
       const { role } = await this.mongoService.getRoleAndUserByName(guildID, roleName);
 
       if (!role) {
-        return interaction.reply({ content: `Role not found: ${roleName}`, ephemeral: true });
+        return interaction.followUp({ content: `Role not found: ${roleName}`, ephemeral: true });
       }
 
       const roleToGet = await interaction.guild.roles.fetch(role.ID);
       await member.roles.add(roleToGet);
-      await interaction.reply({ content: 'Role added to user successfully', ephemeral: true });
+      await interaction.followUp({ content: 'Role added to user successfully', ephemeral: true });
     } catch (error) {
       console.error('Error in getRole:', error);
-      await interaction.reply({ content: 'An error occurred while adding the role.', ephemeral: true });
+      await interaction.followUp({ content: 'An error occurred while adding the role.', ephemeral: true });
     }
   }
 
@@ -137,11 +137,11 @@ export class RoleService {
       const { role } = await this.mongoService.getRoleAndUserByName(interaction.guild.id, roleName);
 
       if (!role) {
-        return interaction.reply({ content: `Role not found: ${role.name}`, ephemeral: true });
+        return interaction.followUp({ content: `Role not found: ${role.name}`, ephemeral: true });
       }
 
       if (!member.permissions.has(PermissionsBitField.Flags.Administrator) || interaction.user.id === role.ID) {
-        return interaction.reply({
+        return interaction.followUp({
           content: `You don't have the necessary permissions to delete roles.`,
           ephemeral: true,
         });
@@ -153,10 +153,10 @@ export class RoleService {
 
       await this.mongoService.deleteRoleByName(interaction.guild.id, roleName);
 
-      return interaction.reply({ content: `Role '${roleName}' deleted successfully.`, ephemeral: true });
+      return interaction.followUp({ content: `Role '${roleName}' deleted successfully.`, ephemeral: true });
     } catch (err) {
       console.error('Error deleting role:', err);
-      return interaction.reply({
+      return interaction.followUp({
         content: `An error occurred while deleting the role '${roleName}'.`,
         ephemeral: true,
       });
