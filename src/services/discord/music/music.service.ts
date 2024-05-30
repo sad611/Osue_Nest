@@ -15,6 +15,7 @@ import { EngineMenuInterceptor, LoopMenuInterceptor } from './options/menu.inter
 import { EmbedService } from '../embed/embed.service';
 import { EmbedInteractionService } from '../embed/embed-interaction/embed-interaction.service';
 import { MenuService } from '../components/menu/menu.service';
+import * as fs from 'fs';
 
 const choicesSet = new Set<SearchQueryType>(['youtubeSearch', 'spotifySearch', 'soundcloudSearch']);
 
@@ -28,31 +29,46 @@ const UtilsCommands = createCommandGroupDecorator({
 // move
 // bota no biotao
 // botar musica que vai tocar
+// botar footer no nowPlaying
 
 @UtilsCommands()
 @Injectable()
 export class MusicService {
   private player: Player;
   private logger: Logger;
+  private cookie;
   constructor(
     client: Client,
     private menuService: MenuService,
     private embedService: EmbedService,
     @Inject(forwardRef(() => EmbedInteractionService)) private embedInteraction: EmbedInteractionService,
   ) {
-    this.player = new Player(client);
+
+    const cookie = JSON.parse(fs.readFileSync('src/json/cookie.json', 'utf8'));
+
+    this.player = new Player(client, {
+      ytdlOptions: {
+        requestOptions: {
+          headers: {
+            cookie: cookie,
+          },
+        },
+      },
+    });
 
     this.player.events.on('playerStart', async (queue, track) => {
-      const embed = this.embedService.Info({
-        title: `Now Playing!`,
-        thumbnail: { url: track.thumbnail },
-        description: `[${track.title}](${track.url})`,
-        fields: [
-          { name: 'Author', value: `${track.author}`, inline: true },
-          { name: '', value: ``, inline: true },
-          { name: 'Duration', value: `${track.duration}`, inline: true },
-        ],
-      });
+      const embed = this.embedService
+        .Info({
+          title: `Now Playing!`,
+          thumbnail: { url: track.thumbnail },
+          description: `[${track.title}](${track.url})`,
+          fields: [
+            { name: 'Author', value: `${track.author}`, inline: true },
+            { name: '', value: ``, inline: true },
+            { name: 'Duration', value: `${track.duration}`, inline: true },
+          ],
+        })
+        .setFooter({ text: `${track.requestedBy.username}`, iconURL: `${track.requestedBy.displayAvatarURL()}` });
 
       if (queue.repeatMode === QueueRepeatMode.QUEUE) {
         embed.setFooter({ text: 'Queue is in loop' });
@@ -60,7 +76,7 @@ export class MusicService {
 
       const channel = queue.metadata.channel as GuildTextBasedChannel;
 
-      this.embedInteraction.handleInteractionGeneral(channel, queue, embed, track.durationMS);
+      this.embedInteraction.handleInteractionGeneral(channel, queue, embed, track.durationMS, track.requestedBy);
     });
 
     this.player.events.on('playerError', (queue, error) => {
@@ -84,8 +100,9 @@ export class MusicService {
     try {
       const member = await interaction.guild.members.fetch(interaction.user.id);
       const channel = member.voice.channel;
-      if (!channel) return;
-      if (!choicesSet.has(engine)) engine = 'autoSearch';
+      if (!channel)
+        return interaction.followUp({ content: 'You need to be connected to a voice channel!', ephemeral: true });
+      if (!choicesSet.has(engine)) engine = 'autoSearch' as SearchQueryType;
 
       await interaction.deferReply();
 
@@ -112,8 +129,9 @@ export class MusicService {
           deaf: true,
         },
       });
+      if (!track) return;
 
-      if (queue.tracks.size === 0) return;
+      if (queue.tracks.size === 0) return interaction.deleteReply();
 
       const embed = this.embedService
         .Info({
@@ -132,7 +150,7 @@ export class MusicService {
 
       return interaction.followUp({ embeds: [embed] });
     } catch (err) {
-      this.logger.log(err);
+      console.log(err);
     }
   }
 
@@ -198,9 +216,10 @@ export class MusicService {
     const queue = useQueue(interaction.guild);
     await interaction.deferReply();
 
-    if (!queue) return interaction.followUp({ content: 'There is no music in the queue', ephemeral: true });
+    if (!queue) return interaction.followUp({ content: 'There is no queue created', ephemeral: true });
     const tracks = queue.tracks;
-    await this.embedInteraction.handleInteractionQueue(interaction.channel, queue, tracks.toArray());
+    interaction.deleteReply();
+    await this.embedInteraction.handleInteractionQueue(interaction.channel, queue, tracks.toArray(), interaction.user);
   }
 
   @UseInterceptors(LoopMenuInterceptor)
@@ -272,7 +291,13 @@ export class MusicService {
     timeline.resume();
     const embed = this.embedService.Info({ title: 'Resumed' }).withAuthor(interaction.user);
 
-    this.embedInteraction.handleInteractionGeneral(interaction.channel, queue, embed, timeline.track.durationMS);
+    this.embedInteraction.handleInteractionGeneral(
+      interaction.channel,
+      queue,
+      embed,
+      timeline.track.durationMS,
+      interaction.user,
+    );
   }
 
   @Subcommand({ name: 'shuffle', description: 'Shuffles the queue' })
@@ -359,8 +384,8 @@ export class MusicService {
       return interaction.followUp({ embeds: [embed] });
     }
 
-    const connection = this.player.voiceUtils.getConnection(interaction.guild.id)
-    this.player.voiceUtils.disconnect(connection)
+    const connection = this.player.voiceUtils.getConnection(interaction.guild.id);
+    this.player.voiceUtils.disconnect(connection);
     queue.delete();
 
     const embed = this.embedService
@@ -374,7 +399,7 @@ export class MusicService {
   }
 
   @Subcommand({ name: 'clear', description: 'Clear the queue' })
-  public async clearMusic(@Context() [interaction]: SlashCommandContext, @Options() { from, to }: MoveDto) {
+  public async clearMusic(@Context() [interaction]: SlashCommandContext, @Options() MoveDto) {
     await interaction.deferReply();
 
     const queue = useQueue(interaction.guildId);
@@ -471,8 +496,7 @@ export class MusicService {
             deaf: true,
           },
         });
-        console.log(queue.tracks.size);
-        if (queue.tracks.size === 0) return;
+        if (queue.tracks.size === 0) return interaction.deleteReply();
         const embed2 = this.embedService
           .Info({
             title: `Track queued at position #${queue.tracks.size}!`,
@@ -543,7 +567,6 @@ export class MusicService {
     const queue = useQueue(interaction.guild);
 
     await interaction.deferReply({ ephemeral: true });
-    console.log(queue?.channel);
     if (!queue?.channel) {
       const embed = this.embedService.Info({
         title: 'Not in channel',
@@ -569,7 +592,6 @@ export class MusicService {
     }
 
     const queue = useQueue(interaction.guild);
-    console.log(queue?.isPlaying);
     if (queue?.isPlaying) {
       const embed = this.embedService.Info({
         title: 'Already playing in another channel',

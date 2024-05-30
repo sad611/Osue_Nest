@@ -7,6 +7,7 @@ import {
   ChatInputCommandInteraction,
   TextChannel,
   GuildTextBasedChannel,
+  User,
 } from 'discord.js';
 import { EmbedService } from '../embed.service';
 import { MusicService } from '../../music/music.service';
@@ -41,12 +42,13 @@ export class EmbedInteractionService {
     channel: GuildTextBasedChannel,
     queue: GuildQueue<any>,
     tracks: any,
+    author: User,
   ): Promise<void> {
     if (queue.tracks.size === 0) {
       const embed = this.embedService.Info({
         title: 'Queue!',
         description: 'There is currently no track on the queue',
-      });
+      }).withAuthor(author);
       await channel.send({ embeds: [embed] });
       return;
     }
@@ -62,7 +64,7 @@ export class EmbedInteractionService {
       text: `página ${curPage} de ${Math.ceil(queue.tracks.size / sliceLength)}, duração da fila ${
         queue.durationFormatted
       }`,
-    });
+    }).withAuthor(author);
     const row = this.createButtonRowQueue(curPage, tracks.length, sliceLength);
     const interactionResponse = await channel.send({ embeds: [embed], components: [row] });
 
@@ -92,6 +94,7 @@ export class EmbedInteractionService {
     queue: GuildQueue<any>,
     embed: EmbedService,
     duration: number,
+    author: User,
   ) {
     const row = this.createButtonRowGeneral();
     const message = await channel.send({ embeds: [embed], components: [row] });
@@ -114,7 +117,7 @@ export class EmbedInteractionService {
           break;
         case 'queue':
           await e.update({ embeds: [embed], components: [row] });
-          this.handleInteractionQueue(channel, queue, queue.tracks.toArray());
+          this.handleInteractionQueue(channel, queue, queue.tracks.toArray(), author);
           break;
 
         case 'loop':
