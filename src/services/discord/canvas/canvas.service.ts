@@ -22,14 +22,14 @@ export class CanvasService {
     const lineHeight = 28;
     const marginLateral = 64;
     const marginVertical = 28;
-    ctx.font = `${fontSize}px Sans`;
+    ctx.font = `${fontSize}px`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
 
     const colorsPerColumn = 10;
     const columns = 3;
 
-    const columnWidth = canvasWidth / columns; 
+    const columnWidth = canvasWidth / columns;
 
     for (let i = 0; i < colorRoles.length; i++) {
       const color = colorRoles[i];
@@ -49,5 +49,3 @@ export class CanvasService {
     return file;
   }
 }
-
-
