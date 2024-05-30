@@ -5,9 +5,10 @@ phases:
       nodejs: latest
     commands:
       - npm install
+      - npm install -g @nestjs/cli
   build:
     commands:
-      - npm run build
+      - npx @nestjs/cli build
   post_build:
     commands:
       - printenv > .env
