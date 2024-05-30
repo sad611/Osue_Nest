@@ -1,6 +1,8 @@
 version: 0.2
 phases:
   install:
+    runtime-versions:
+      nodejs: 20
     commands:
       - npm install
   build:
@@ -15,5 +17,6 @@ phases:
 
 artifacts:
   files:
-    - 'dist/**'
+    - '**/*'
+  base-directory: dist
   discard-paths: no
