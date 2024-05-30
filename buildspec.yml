@@ -15,6 +15,9 @@ phases:
       - cp .env dist/.env
       - cp -R node_modules/ dist/node_modules
       - cp Procfile dist/Procfile
+      - mkdir -p dist/src
+      - cp -R src/json dist/src
+      - cp -R src/assets dist/src
 
 artifacts:
   files:
