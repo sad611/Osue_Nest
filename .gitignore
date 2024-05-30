@@ -2,8 +2,6 @@
 
 
 # youtube cookie
-cookie.json
-
 # dependencies
 /node_modules
 /.pnp
