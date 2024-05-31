@@ -10,7 +10,7 @@
     "start:prod": "nest start",
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "eslint . --ext .ts",
-    "deploy": "npm install && npm run build && npm run start:prod"
+    "deploy": "npm install && npm run start:prod"
   },
   "author": "",
   "license": "ISC",

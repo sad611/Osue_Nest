@@ -3,11 +3,13 @@ phases:
   install:
     runtime-versions:
       nodejs: latest
+    commands:
+      - npm install
   build:
     commands:
       - printenv > .env
 
 artifacts:
   files:
-    - './**'
+    - '**/*'
   discard-paths: no
