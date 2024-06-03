@@ -43,8 +43,7 @@ export class MusicService {
     private embedService: EmbedService,
     @Inject(forwardRef(() => EmbedInteractionService)) private embedInteraction: EmbedInteractionService,
   ) {
-
-    const cookie = JSON.parse(fs.readFileSync('src/json/cookie.json', 'utf8'));
+    const cookie = JSON.parse(fs.readFileSync('./src/json/cookie.json', 'utf8'));
 
     this.player = new Player(client, {
       ytdlOptions: {

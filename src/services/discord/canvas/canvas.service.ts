@@ -6,7 +6,7 @@ import { join } from 'path';
 @Injectable()
 export class CanvasService {
   constructor(private readonly colorService: ColorService) {
-    registerFont('../../../assets/OpenSans-Regular.ttf', { family: 'OpenSans' });
+    registerFont('./src/assets/OpenSans-Regular.ttf', { family: 'OpenSans' });
   }
 
   async createColorNamesImage(roles: any) {
