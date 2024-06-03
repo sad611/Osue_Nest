@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { createCanvas, loadImage } from 'canvas';
+import { createCanvas, loadImage, registerFont } from 'canvas';
 import { ColorService } from '../color/color.service';
 import { join } from 'path';
 
 @Injectable()
-@Injectable()
 export class CanvasService {
-  constructor(private readonly colorService: ColorService) {}
+  constructor(private readonly colorService: ColorService) {
+    registerFont('../../../assets/OpenSans-Regular.ttf', { family: 'OpenSans' });
+  }
 
   async createColorNamesImage(roles: any) {
     const colorRoles = roles.map(({ role }) => ({ name: role.name, hex: role.hex }));
@@ -22,7 +23,7 @@ export class CanvasService {
     const lineHeight = 28;
     const marginLateral = 64;
     const marginVertical = 28;
-    ctx.font = `${fontSize}px`;
+    ctx.font = `${fontSize}px OpenSans`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
 

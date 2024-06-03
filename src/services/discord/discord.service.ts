@@ -74,7 +74,7 @@ export class DiscordService {
     await this.player.extractors.loadDefault();
     this.logger.log(`Bot logged in as ${client.user.username}`);
 
-    const job = new CronJob('0 0 * * *', () => {
+    const job = new CronJob('0 3 * * *', () => {
       this.aniverJob();
     });
 
@@ -89,7 +89,7 @@ export class DiscordService {
   @On('messageCreate')
   public onMessage(@Context() [message]: ContextOf<'messageCreate'>) {
     if (message.author.bot) return;
-    const channel = message.channel as TextChannel
+    const channel = message.channel as TextChannel;
     this.logger.log(`{${message.guild.name}}[${channel.name}](${message.author.username}): ${message.content}`);
   }
 }
