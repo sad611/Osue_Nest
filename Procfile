@@ -1,1 +1,1 @@
-web: pwd && npm run start:prod
+web: pwd && npm install && npm run start:prod
