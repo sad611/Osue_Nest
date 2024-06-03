@@ -1,1 +1,1 @@
-web: pwd && npm install && npm run start:prod
+web: node main.js

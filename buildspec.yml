@@ -4,12 +4,23 @@ phases:
     runtime-versions:
       nodejs: latest
     commands:
-      - pwd
+      - npm install
+      - npm install -g @nestjs/cli
   build:
     commands:
+      - npx @nestjs/cli build
+  post_build:
+    commands:
       - printenv > .env
+      - cp .env dist/.env
+      - cp -R node_modules/ dist/node_modules
+      - cp Procfile dist/Procfile
+      - mkdir -p dist/src
+      - cp -R src/json dist/src
+      - cp -R src/assets dist/src
 
 artifacts:
   files:
     - '**/*'
+  base-directory: dist
   discard-paths: no
