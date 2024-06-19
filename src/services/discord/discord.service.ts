@@ -1,29 +1,27 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, HttpServer} from '@nestjs/common';
 import { Player, useMainPlayer } from 'discord-player';
 import { Client, GuildMember, TextChannel } from 'discord.js';
 import { LavalinkManager } from 'lavalink-client/dist/types';
 import { Once, Context, ContextOf, On } from 'necord';
 import { CronJob } from 'cron';
 import * as fs from 'fs';
-import * as path from 'path';
+import { Observable } from 'rxjs';
+import { HttpService } from '@nestjs/axios';
+import { AxiosResponse } from 'axios';
 
 @Injectable()
 export class DiscordService {
   private readonly logger = new Logger(DiscordService.name);
   private player: Player;
+  private queue
 
-  public constructor(private client: Client) {
+  public constructor(private client: Client, private httpService: HttpService) {
     this.player = useMainPlayer();
-    // this.player.events.on('playerStart', (queue, track) => {
-    //   queue.metadata.channel.send(`Started playing **${track.title}**!`);
-    // });
-    // this.player.events.on('playerError', (queue, error) => {
-    //   this.logger.log(error)
-    // });
-    // this.player.events.on('audioTrackAdd', (queue, track) => {
-    //   this.logger.log(track.title)
-    // });
   }
+
+  // findAll(): Observable<AxiosResponse<any[]>> {
+  //   return this.httpService.get('http://localhost:4200/example/user');
+  // }
 
   private async aniverJob() {
     try {
@@ -72,13 +70,16 @@ export class DiscordService {
   @Once('ready')
   public async onReady(@Context() [client]: ContextOf<'ready'>) {
     await this.player.extractors.loadDefault();
+
+    // this.findAll().subscribe(({data}) => console.log(data))
+
     this.logger.log(`Bot logged in as ${client.user.username}`);
 
-    const job = new CronJob('0 0 * * *', () => {
-      this.aniverJob();
-    });
+    // const job = new CronJob('0 0 * * *', () => {
+    //   this.aniverJob();
+    // });
 
-    job.start();
+    // job.start();
   }
 
   @On('warn')
@@ -89,7 +90,7 @@ export class DiscordService {
   @On('messageCreate')
   public onMessage(@Context() [message]: ContextOf<'messageCreate'>) {
     if (message.author.bot) return;
-    const channel = message.channel as TextChannel
+    const channel = message.channel as TextChannel;
     this.logger.log(`{${message.guild.name}}[${channel.name}](${message.author.username}): ${message.content}`);
   }
 }

@@ -8,6 +8,7 @@ import {
   TextChannel,
   GuildTextBasedChannel,
   User,
+  Message,
 } from 'discord.js';
 import { EmbedService } from '../embed.service';
 import { MusicService } from '../../music/music.service';
@@ -17,6 +18,8 @@ import { GuildQueue, QueueRepeatMode, useQueue, useTimeline } from 'discord-play
 export class EmbedInteractionService {
   private readonly nextButton: ButtonBuilder;
   private readonly prevButton: ButtonBuilder;
+  private readonly firstButton: ButtonBuilder;
+  private readonly lastButton: ButtonBuilder;
   private readonly skipButton: ButtonBuilder;
   private readonly pauseButton: ButtonBuilder;
   private readonly queueButton: ButtonBuilder;
@@ -29,6 +32,8 @@ export class EmbedInteractionService {
   ) {
     this.prevButton = new ButtonBuilder().setCustomId('prev-page').setLabel('Previous').setStyle(ButtonStyle.Secondary);
     this.nextButton = new ButtonBuilder().setCustomId('next-page').setLabel('Next').setStyle(ButtonStyle.Secondary);
+    this.firstButton = new ButtonBuilder().setCustomId('first-page').setLabel('First').setStyle(ButtonStyle.Secondary);
+    this.lastButton = new ButtonBuilder().setCustomId('last-page').setLabel('Last').setStyle(ButtonStyle.Secondary);
     this.pauseButton = new ButtonBuilder()
       .setCustomId('pause-track')
       .setLabel('Pause | Resume')
@@ -45,47 +50,67 @@ export class EmbedInteractionService {
     author: User,
   ): Promise<void> {
     if (queue.tracks.size === 0) {
-      const embed = this.embedService.Info({
-        title: 'Queue!',
-        description: 'There is currently no track on the queue',
-      }).withAuthor(author);
+      const embed = this.embedService
+        .Info({
+          title: 'Queue!',
+          description: 'There is currently no track on the queue',
+        })
+        .withAuthor(author);
       await channel.send({ embeds: [embed] });
       return;
     }
 
     let curPage = 1;
     const sliceLength = 10;
+    const totalPages = Math.ceil(queue.tracks.size / sliceLength);
 
-    const page = this.paginateArray(tracks, sliceLength, curPage);
+    const sendQueuePage = async (page: number): Promise<Message<true>> => {
+      const paginatedTracks = this.paginateArray(tracks, sliceLength, page);
+      const description = this.createQueuePageDescription(paginatedTracks, page);
+      const embed = this.embedService
+        .Info({ title: 'Queue!', description })
+        .setFooter({
+          text: `Página ${page} de ${totalPages}, duração da fila ${queue.durationFormatted}`,
+        })
+        .withAuthor(author);
+      const row = this.createButtonRowQueue(page, tracks.length, sliceLength);
+      return await channel.send({ embeds: [embed], components: [row] });
+    };
 
-    const description = this.createQueuePageDescription(page, curPage);
-
-    const embed = this.embedService.Info({ title: 'Queue!', description: description }).setFooter({
-      text: `página ${curPage} de ${Math.ceil(queue.tracks.size / sliceLength)}, duração da fila ${
-        queue.durationFormatted
-      }`,
-    }).withAuthor(author);
-    const row = this.createButtonRowQueue(curPage, tracks.length, sliceLength);
-    const interactionResponse = await channel.send({ embeds: [embed], components: [row] });
-
-    const collector = interactionResponse.createMessageComponentCollector({ idle: 15000, time: 30000 });
+    const interactionResponse = await sendQueuePage(curPage);
+    const collector = interactionResponse.createMessageComponentCollector({ idle: 45000, time: 120000 });
 
     collector.on('collect', async (e) => {
       switch (e.customId) {
+        case 'first-page':
+          curPage = 1;
+          break;
         case 'next-page':
-          curPage += 1;
+          curPage = Math.min(curPage + 1, totalPages);
           break;
         case 'prev-page':
-          curPage -= 1;
+          curPage = Math.max(curPage - 1, 1);
+          break;
+        case 'last-page':
+          curPage = totalPages;
           break;
       }
-      const newPage = this.paginateArray(tracks, sliceLength, curPage);
-      const nextDescription = this.createQueuePageDescription(newPage, curPage);
-      const updatedRow = this.createButtonRowQueue(curPage, tracks.length, sliceLength);
-      await e.update({
-        embeds: [this.embedService.Info({ title: 'Queue!', description: nextDescription })],
-        components: [updatedRow],
-      });
+
+      const paginatedTracks = this.paginateArray(tracks, sliceLength, curPage);
+      const description = this.createQueuePageDescription(paginatedTracks, curPage);
+      const embed = this.embedService
+        .Info({ title: 'Queue!', description })
+        .setFooter({
+          text: `Página ${curPage} de ${totalPages}, duração da fila ${queue.durationFormatted}`,
+        })
+        .withAuthor(author);
+      const row = this.createButtonRowQueue(curPage, tracks.length, sliceLength);
+
+      await e.update({ embeds: [embed], components: [row] });
+    });
+
+    collector.on('end', () => {
+      interactionResponse.delete();
     });
   }
 
@@ -117,21 +142,21 @@ export class EmbedInteractionService {
           break;
         case 'queue':
           await e.update({ embeds: [embed], components: [row] });
-          this.handleInteractionQueue(channel, queue, queue.tracks.toArray(), author);
+          this.handleInteractionQueue(channel, queue, queue.tracks.toArray(), e.member.user);
           break;
 
-        case 'loop':
-          let loopMode: QueueRepeatMode;
-          if (queue.repeatMode === QueueRepeatMode.OFF) {
-            loopMode = QueueRepeatMode.QUEUE;
-            embed.setFooter({ text: 'Queue is in loop mode' });
-          } else {
-            loopMode = QueueRepeatMode.OFF;
-            embed.setFooter({ text: '' });
-          }
-          queue.setRepeatMode(loopMode);
-          await e.update({ embeds: [embed], components: [row] });
-          break;
+        // case 'loop':
+        //   let loopMode: QueueRepeatMode;
+        //   if (queue.repeatMode === QueueRepeatMode.OFF) {
+        //     loopMode = QueueRepeatMode.QUEUE;
+        //     embed.setFooter({ text: 'Queue is in loop mode' });
+        //   } else {
+        //     loopMode = QueueRepeatMode.OFF;
+        //     embed.setFooter({ text: '' });
+        //   }
+        //   queue.setRepeatMode(loopMode);
+        //   await e.update({ embeds: [embed], components: [row] });
+        //   break;
       }
     });
   }
@@ -144,8 +169,10 @@ export class EmbedInteractionService {
     const nextDisabled = !(curPage < Math.ceil(tracksLength / sliceLength));
     const prevDisabled = curPage === 1;
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
+      this.firstButton.setDisabled(prevDisabled),
       this.prevButton.setDisabled(prevDisabled),
       this.nextButton.setDisabled(nextDisabled),
+      this.lastButton.setDisabled(nextDisabled),
     );
   }
 
@@ -153,7 +180,7 @@ export class EmbedInteractionService {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
       this.pauseButton,
       this.skipButton,
-      this.loopButton,
+      // this.loopButton,
       this.queueButton,
     );
   }

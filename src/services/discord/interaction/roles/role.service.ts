@@ -109,12 +109,12 @@ export class RoleService {
       const guildID = interaction.guild.id;
       const memberID = interaction.user.id;
       const member = await interaction.guild.members.fetch(memberID);
-      const { role } = await this.mongoService.getRoleAndUserByName(guildID, roleName);
+      const result = await this.mongoService.getRoleAndUserByName(guildID, roleName);
 
-      if (!role) {
+      if (!result) {
         return interaction.reply({ content: `Role not found: ${roleName}`, ephemeral: true });
       }
-
+      const { role } = result;
       const roleToGet = await interaction.guild.roles.fetch(role.ID);
       await member.roles.add(roleToGet);
       await interaction.reply({ content: 'Role added to user successfully', ephemeral: true });

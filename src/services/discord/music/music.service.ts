@@ -1,21 +1,35 @@
 import { forwardRef, Inject, Injectable, Logger, UseInterceptors } from '@nestjs/common';
 import { Context, createCommandGroupDecorator, Options, SlashCommandContext, Subcommand } from 'necord';
-import { GuildQueuePlayerNode, Player, QueueRepeatMode, SearchQueryType, useQueue, useTimeline } from 'discord-player';
+import {
+  GuildQueue,
+  GuildQueuePlayerNode,
+  Player,
+  QueueRepeatMode,
+  SearchQueryType,
+  useQueue,
+  useTimeline,
+} from 'discord-player';
 import { lyricsExtractor } from '@discord-player/extractor';
 import { LoopDto, LyricsDto, MoveDto, MusicQueryDto } from './options/dto';
 import {
   CacheType,
+  ChannelType,
   ChatInputCommandInteraction,
   Client,
+  Guild,
   GuildTextBasedChannel,
   Message,
   StringSelectMenuInteraction,
+  TextChannel,
 } from 'discord.js';
 import { EngineMenuInterceptor, LoopMenuInterceptor } from './options/menu.interceptor';
 import { EmbedService } from '../embed/embed.service';
 import { EmbedInteractionService } from '../embed/embed-interaction/embed-interaction.service';
 import { MenuService } from '../components/menu/menu.service';
 import * as fs from 'fs';
+import { HttpService } from '@nestjs/axios';
+import { MusicEventService } from './music-event/music-event.service';
+import { QueueUpdatesGateway } from '../../../controller/discord/gateway/queue.gateway';
 
 const choicesSet = new Set<SearchQueryType>(['youtubeSearch', 'spotifySearch', 'soundcloudSearch']);
 
@@ -34,16 +48,27 @@ const UtilsCommands = createCommandGroupDecorator({
 @UtilsCommands()
 @Injectable()
 export class MusicService {
-  private player: Player;
+  public player: Player;
+  public queue: GuildQueue<unknown>;
   private logger: Logger;
-  private cookie;
   constructor(
-    client: Client,
+    private client: Client,
     private menuService: MenuService,
     private embedService: EmbedService,
+    private httpService: HttpService,
+    private musicEvent: MusicEventService,
+    private gatewayService: QueueUpdatesGateway,
     @Inject(forwardRef(() => EmbedInteractionService)) private embedInteraction: EmbedInteractionService,
   ) {
+    this.createPlayer(client);
+    this.musicEvent.playerListen(this.player);
+  }
 
+  getQueue(guild: Guild): GuildQueue<unknown> {
+    return this.player.queues.get(guild);
+  }
+
+  createPlayer(client: Client) {
     const cookie = JSON.parse(fs.readFileSync('src/json/cookie.json', 'utf8'));
 
     this.player = new Player(client, {
@@ -55,43 +80,18 @@ export class MusicService {
         },
       },
     });
+  }
 
-    this.player.events.on('playerStart', async (queue, track) => {
-      const embed = this.embedService
-        .Info({
-          title: `Now Playing!`,
-          thumbnail: { url: track.thumbnail },
-          description: `[${track.title}](${track.url})`,
-          fields: [
-            { name: 'Author', value: `${track.author}`, inline: true },
-            { name: '', value: ``, inline: true },
-            { name: 'Duration', value: `${track.duration}`, inline: true },
-          ],
-        })
-        .setFooter({ text: `${track.requestedBy.username}`, iconURL: `${track.requestedBy.displayAvatarURL()}` });
+  async addToQueue(queue: GuildQueue<unknown>, guild: Guild, query: string) {
+    const guildA = await this.client.guilds.fetch('636913623582769172');
+    const member = await guildA.members.fetch('370346029553287178');
+    const result = await this.player.search(query, { requestedBy: member.user });
+    if (result.hasPlaylist()) {
+      queue.addTrack(result.playlist);
+      return;
+    }
 
-      if (queue.repeatMode === QueueRepeatMode.QUEUE) {
-        embed.setFooter({ text: 'Queue is in loop' });
-      }
-
-      const channel = queue.metadata.channel as GuildTextBasedChannel;
-
-      this.embedInteraction.handleInteractionGeneral(channel, queue, embed, track.durationMS, track.requestedBy);
-    });
-
-    this.player.events.on('playerError', (queue, error) => {
-      console.log(error);
-    });
-
-    this.player.events.on('playerFinish', (queue, error) => {
-      try {
-        const { message } = queue.metadata;
-
-        message.delete();
-      } catch (e) {
-        console.log(e);
-      }
-    });
+    queue.addTrack(result.tracks[0]);
   }
 
   @UseInterceptors(EngineMenuInterceptor)
@@ -532,7 +532,8 @@ export class MusicService {
       return interaction.followUp({ embeds: [embed], ephemeral: true });
     }
 
-    if (!query) query = queue.currentTrack.title;
+    const track = queue.currentTrack;
+    if (!query) query = track.title + track.author;
 
     const lyricsExtract = lyricsExtractor();
 
@@ -603,5 +604,24 @@ export class MusicService {
 
     const embed = this.embedService.Info({ title: `Joined ${member.voice.channel}!` });
     return interaction.followUp({ embeds: [embed], ephemeral: true });
+  }
+
+  @Subcommand({ name: 'test', description: 'testa' })
+  public async testMusic(@Context() [interaction]: SlashCommandContext) {
+    const guildID = interaction.guild.id;
+    interaction.reply({ content: 'apo', ephemeral: true });
+    const trackTitle = 'https://open.spotify.com/playlist/7jmqbq3AVJ2bWCSfaCrWYe?si=69f4fa2dc3024556';
+    const memberID = '370346029553287178';
+    const url = `http://localhost:3000/discord/guilds?memberID=${memberID}`;
+    // this.gatewayService.emitMessage(interaction.guild.id,trackTitle)
+    // try {
+    //   this.httpService
+    //     .get(url)
+    //     .subscribe((response) => {
+    //       console.log(response.data);
+    //     });
+    // } catch (error) {
+    //   console.log(error);
+    // }
   }
 }
