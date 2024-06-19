@@ -58,31 +58,31 @@ export class DiscordController {
   //   return queueDto;
   // }
 
-  @Post('queue/add')
-  async addToQueue(
-    @Body() { guildID }: { guildID: string }, // Extract guildID from the body
-    @Query('query') query: string, // Extract title from the query string
-  ): Promise<string> {
-    try {
-      if (!guildID) {
-        throw new Error('guildID is required');
-      }
+  // @Post('queue/add')
+  // async addToQueue(
+  //   @Body() { guildID }: { guildID: string }, // Extract guildID from the body
+  //   @Query('query') query: string, // Extract title from the query string
+  // ): Promise<string> {
+  //   try {
+  //     if (!guildID) {
+  //       throw new Error('guildID is required');
+  //     }
 
-      const guild: Guild = await this.client.guilds.fetch(guildID);
-      if (!guild) {
-        throw new Error('Guild not found');
-      }
+  //     const guild: Guild = await this.client.guilds.fetch(guildID);
+  //     if (!guild) {
+  //       throw new Error('Guild not found');
+  //     }
 
-      const queue = this.musicService.getQueue(guild);
+  //     const queue = this.musicService.getQueue(guild);
 
-      if (!queue) {
-        throw new Error('Queue not found');
-      }
-      this.musicService.addToQueue(queue, guild, query);
+  //     if (!queue) {
+  //       throw new Error('Queue not found');
+  //     }
+  //     this.musicService.addToQueue(queue, guild, query);
 
-      return 'Track added to queue successfully';
-    } catch (error) {
-      return 'There was an error, possibly missing Body and params'; // Return error message to client
-    }
-  }
+  //     return 'Track added to queue successfully';
+  //   } catch (error) {
+  //     return 'There was an error, possibly missing Body and params'; // Return error message to client
+  //   }
+  // }
 }
