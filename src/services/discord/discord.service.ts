@@ -75,11 +75,10 @@ export class DiscordService {
 
     this.logger.log(`Bot logged in as ${client.user.username}`);
 
-    // const job = new CronJob('0 0 * * *', () => {
-    //   this.aniverJob();
-    // });
-
-    // job.start();
+    const job = new CronJob('0 3 * * *', () => {
+      this.aniverJob();
+    });
+    job.start();
   }
 
   @On('warn')
