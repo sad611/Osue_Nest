@@ -603,4 +603,11 @@ export class MusicService {
     const embed = this.embedService.Info({ title: `Joined ${member.voice.channel}!` });
     return interaction.followUp({ embeds: [embed], ephemeral: true });
   }
+
+  @Subcommand({ name: 'test', description: 'test' })
+  public async testMusic(@Context() [interaction]: SlashCommandContext) {
+    const member = await interaction.guild.members.fetch('473268285362667522');
+    const role = await interaction.guild.roles.fetch('1253319749895585883');
+    member.roles.remove(role).then((res) => console.log(res));
+  }
 }
