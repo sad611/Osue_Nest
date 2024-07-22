@@ -1,11 +1,16 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
-import { GuildQueue, Track, useQueue } from 'discord-player';
-import { MusicService } from '../../services/discord/music/music.service';
+import { Controller, Get, Post, Query } from '@nestjs/common';
+import { useQueue } from 'discord-player';
 import { Client, Guild } from 'discord.js';
+import { DiscordService } from 'src/services/discord/discord.service';
+import { MusicService } from '../../services/discord/music/music.service';
 
 @Controller('discord')
 export class DiscordController {
-  constructor(private musicService: MusicService, private client: Client) {}
+  constructor(
+    private musicService: MusicService,
+    private client: Client,
+    private discordService: DiscordService,
+  ) {}
 
   @Get('user')
   getUser(): string {
@@ -26,10 +31,19 @@ export class DiscordController {
 
   @Get('queue')
   async getQueue(@Query('guildID') guildID: string) {
-    const guild = await this.client.guilds.fetch(guildID)
-    const queue = useQueue(guild)
-    if (queue === null) return {currentTrack: '', tracks: []}
-    return {currentTrack: queue.currentTrack, tracks: queue.tracks};
+    const guild = await this.client.guilds.fetch(guildID);
+    const queue = useQueue(guild);
+    if (queue === null) return { currentTrack: '', tracks: [] };
+    return { currentTrack: queue.currentTrack, tracks: queue.tracks };
+  }
+
+  @Post('aniver')
+  async runAniverJob() {
+    await this.discordService.aniverJob();
+    return {
+      statusCode: 200,
+      message: 'Executado',
+    };
   }
 
   // @Get('queue')

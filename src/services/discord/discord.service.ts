@@ -1,21 +1,21 @@
-import { Injectable, Logger, HttpServer} from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
+import { Injectable, Logger } from '@nestjs/common';
+import { CronJob } from 'cron';
 import { Player, useMainPlayer } from 'discord-player';
 import { Client, GuildMember, TextChannel } from 'discord.js';
-import { LavalinkManager } from 'lavalink-client/dist/types';
-import { Once, Context, ContextOf, On } from 'necord';
-import { CronJob } from 'cron';
 import * as fs from 'fs';
-import { Observable } from 'rxjs';
-import { HttpService } from '@nestjs/axios';
-import { AxiosResponse } from 'axios';
+import { Context, ContextOf, On, Once } from 'necord';
 
 @Injectable()
 export class DiscordService {
   private readonly logger = new Logger(DiscordService.name);
   private player: Player;
-  private queue
+  private queue;
 
-  public constructor(private client: Client, private httpService: HttpService) {
+  public constructor(
+    private client: Client,
+    private httpService: HttpService,
+  ) {
     this.player = useMainPlayer();
   }
 
@@ -23,7 +23,7 @@ export class DiscordService {
   //   return this.httpService.get('http://localhost:4200/example/user');
   // }
 
-  private async aniverJob() {
+  public async aniverJob() {
     try {
       const data = JSON.parse(fs.readFileSync('src/json/Undergrounds.json', 'utf8'));
       const date = new Date();
@@ -38,16 +38,16 @@ export class DiscordService {
         return element.aniverDay === date.getDate() && element.aniverMonth === date.getMonth();
       });
 
-      const aniverMembers: GuildMember[] = await Promise.all(
-        candidates.map(async (candidate) => {
-          try {
-            return await guild.members.fetch(candidate.userID);
-          } catch (error) {
-            console.error(`Error fetching member with ID ${candidate.userID}:`, error);
-            return null;
-          }
-        }),
-      );
+      const aniverMembers: GuildMember[] = [];
+
+      for (const candidate of candidates) {
+        try {
+          const discordUser = await guild.members.fetch(candidate.userId);
+          aniverMembers.push(discordUser);
+        } catch (error) {
+          console.error(`Error fetching member with ID ${candidate.userID}:`, error);
+        }
+      }
 
       const exAniversariantes = Array.from(guild.roles.cache.get(aniverRoleID).members.values());
       const membersToRemove = exAniversariantes.filter((member) => !aniverMembers.includes(member));
