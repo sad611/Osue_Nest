@@ -42,7 +42,7 @@ export class DiscordService {
 
       for (const candidate of candidates) {
         try {
-          const discordUser = await guild.members.fetch(candidate.userId);
+          const discordUser = await guild.members.fetch(candidate.userID);
           aniverMembers.push(discordUser);
         } catch (error) {
           console.error(`Error fetching member with ID ${candidate.userID}:`, error);
