@@ -6,7 +6,6 @@ import { InteractionService } from '../../services/discord/interaction/interacti
 import { BirthdayService } from '../../services/discord/interaction/birthday/birthday.service';
 import { MusicService } from '../../services/discord/music/music.service';
 import { DiscordService } from '../../services/discord/discord.service';
-import { LavalinkManager } from 'lavalink-client';
 import { EmbedService } from '../../services/discord/embed/embed.service';
 import { EmbedInteractionService } from '../../services/discord/embed/embed-interaction/embed-interaction.service';
 import { MenuService } from '../../services/discord/components/menu/menu.service';
@@ -14,6 +13,7 @@ import { HttpModule } from '@nestjs/axios';
 import { DiscordController } from '../../controller/discord/discord.controller';
 import { MusicEventService } from '../../services/discord/music/music-event/music-event.service';
 import { QueueUpdatesGateway } from '../../controller/discord/gateway/queue.gateway';
+import { ReactionService } from '../../services/discord/reaction/reaction.service';
 
 @Module({
   imports: [
@@ -31,7 +31,6 @@ import { QueueUpdatesGateway } from '../../controller/discord/gateway/queue.gate
           Partials.ThreadMember,
           Partials.User,
         ],
-        lavalink: LavalinkManager,
       }),
     }),
     HttpModule,

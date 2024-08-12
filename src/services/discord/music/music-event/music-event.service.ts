@@ -27,6 +27,7 @@ export class MusicEventService {
 
   playerListen(player: Player) {
     player.events.on('playerStart', async (queue, track) => {
+      console.log(track);
       const embed = this.embedService
         .Info({
           title: `Now Playing!`,
@@ -54,6 +55,13 @@ export class MusicEventService {
     player.events.on('playerError', (queue, error) => {
       console.log(error);
       this.gatewayService.queueUpdate(queue.guild.id, this.serialize(queue));
+    });
+    player.events.on('error', (queue, error) => {
+      console.log({ error, queue });
+    });
+    
+    player.events.on('debug', async (queue, message) => {
+      // console.log(`Player debug event: ${message}`);
     });
 
     player.events.on('audioTrackAdd', (queue, track) => {

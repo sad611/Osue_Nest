@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Query } from '@nestjs/common';
 import { useQueue } from 'discord-player';
 import { Client, Guild } from 'discord.js';
-import { DiscordService } from 'src/services/discord/discord.service';
+import { DiscordService } from '../../services/discord/discord.service';
 import { MusicService } from '../../services/discord/music/music.service';
 
 @Controller('discord')

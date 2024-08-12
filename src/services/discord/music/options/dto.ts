@@ -10,7 +10,7 @@ export class MusicQueryDto {
     query: string;
      @StringOption({
         name: 'engine',
-        description: 'Search engine used (Defaults to youtube)',
+        description: 'Search engine used',
         autocomplete: true
     })
     engine: SearchQueryType;

@@ -4,13 +4,16 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongodbService } from '../../services/mongodb/mongodb.service';
 import { RoleService } from '../../services/discord/interaction/roles/role.service';
 import { Role, RoleSchema } from '../../services/mongodb/schemas/role.schema';
+import { Message, MessageSchema } from '../../services/mongodb/schemas/message.schema';
 import { ColorService } from '../../services/discord/color/color.service';
 import { CanvasService } from '../../services/discord/canvas/canvas.service';
 import { ButtonColorService } from '../../services/discord/components/button-color/button-color.service';
+import { ReactionService } from '../../services/discord/reaction/reaction.service';
+import { MenuService } from '../../services/discord/components/menu/menu.service';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: Role.name, schema: RoleSchema }]),
+    MongooseModule.forFeature([{ name: Role.name, schema: RoleSchema }, { name: Message.name, schema: MessageSchema }]),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -19,7 +22,7 @@ import { ButtonColorService } from '../../services/discord/components/button-col
       }),
     }),
   ],
-  providers: [MongodbService, RoleService, ColorService, CanvasService, ButtonColorService],
+  providers: [MongodbService, RoleService, ColorService, CanvasService, ButtonColorService, ReactionService, MenuService ],
   exports: [MongodbService],
 })
 export class MongodbModule {}

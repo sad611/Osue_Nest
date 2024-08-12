@@ -16,6 +16,7 @@ import { EmbedService } from '../embed/embed.service';
 import { EmbedInteractionService } from '../embed/embed-interaction/embed-interaction.service';
 import { MenuService } from '../components/menu/menu.service';
 import * as fs from 'fs';
+import { MusicEventService } from './music-event/music-event.service';
 
 const choicesSet = new Set<SearchQueryType>(['youtubeSearch', 'spotifySearch', 'soundcloudSearch']);
 
@@ -41,9 +42,15 @@ export class MusicService {
     client: Client,
     private menuService: MenuService,
     private embedService: EmbedService,
+    private musicEvent: MusicEventService,
     @Inject(forwardRef(() => EmbedInteractionService)) private embedInteraction: EmbedInteractionService,
   ) {
-    const cookie = JSON.parse(fs.readFileSync('./src/json/cookie.json', 'utf8'));
+    this.createPlayer(client);
+    this.musicEvent.playerListen(this.player);
+  }
+
+  createPlayer(client: Client) {
+    const cookie = JSON.parse(fs.readFileSync('src/json/cookie.json', 'utf8'));
 
     this.player = new Player(client, {
       ytdlOptions: {
@@ -54,43 +61,6 @@ export class MusicService {
         },
       },
     });
-
-    this.player.events.on('playerStart', async (queue, track) => {
-      const embed = this.embedService
-        .Info({
-          title: `Now Playing!`,
-          thumbnail: { url: track.thumbnail },
-          description: `[${track.title}](${track.url})`,
-          fields: [
-            { name: 'Author', value: `${track.author}`, inline: true },
-            { name: '', value: ``, inline: true },
-            { name: 'Duration', value: `${track.duration}`, inline: true },
-          ],
-        })
-        .setFooter({ text: `${track.requestedBy.username}`, iconURL: `${track.requestedBy.displayAvatarURL()}` });
-
-      if (queue.repeatMode === QueueRepeatMode.QUEUE) {
-        embed.setFooter({ text: 'Queue is in loop' });
-      }
-
-      const channel = queue.metadata.channel as GuildTextBasedChannel;
-
-      this.embedInteraction.handleInteractionGeneral(channel, queue, embed, track.durationMS, track.requestedBy);
-    });
-
-    this.player.events.on('playerError', (queue, error) => {
-      console.log(error);
-    });
-
-    this.player.events.on('playerFinish', (queue, error) => {
-      try {
-        const { message } = queue.metadata;
-
-        message.delete();
-      } catch (e) {
-        console.log(e);
-      }
-    });
   }
 
   @UseInterceptors(EngineMenuInterceptor)
@@ -100,22 +70,20 @@ export class MusicService {
       const member = await interaction.guild.members.fetch(interaction.user.id);
       const channel = member.voice.channel;
       if (!channel)
-        return interaction.followUp({ content: 'You need to be connected to a voice channel!', ephemeral: true });
+        return interaction.reply({ content: 'You need to be connected to a voice channel!', ephemeral: true });
       if (!choicesSet.has(engine)) engine = 'autoSearch' as SearchQueryType;
 
       await interaction.deferReply();
 
-      const result = await this.player.search(query, { requestedBy: interaction.user });
+      const result = await this.player.search(query, { requestedBy: interaction.user});
       if (!result.hasTracks()) {
         return interaction.followUp({ content: 'No tracks found', ephemeral: true });
       }
-
+      
       const queue =
         this.player.queues.get(interaction.guild) ||
         this.player.queues.create(interaction.guild, { metadata: { channel: interaction.channel } });
-
       const { track } = await this.player.play(channel, result, {
-        searchEngine: engine,
         nodeOptions: {
           noEmitInsert: true,
           preferBridgedMetadata: true,
@@ -123,6 +91,7 @@ export class MusicService {
           leaveOnEnd: false,
           leaveOnStop: false,
           leaveOnEmpty: false,
+          
         },
         connectionOptions: {
           deaf: true,
@@ -442,7 +411,6 @@ export class MusicService {
       const member = await interaction.guild.members.fetch(interaction.user.id);
       const channel = member.voice.channel;
       if (!channel) return;
-
       await interaction.deferReply();
       if (!choicesSet.has(engine)) engine = 'autoSearch';
 
