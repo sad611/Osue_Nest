@@ -73,7 +73,7 @@ export class DiscordService {
         'access_token=ya29.a0AcM612w5nCMtPGBii9evxkiWgATPrWjg73fhlBwZySDEcmQAS1I7Xc7NxQBEWwXMYe_FC8SPSu6j2lMELfYBeLX7z7FeTZw7EjxcAb5zxLX7DJUO6vxo99ga01lXoqjuitf73IdCTpn8aO-aLNbPsy6rcaNW6YJhe-bHUl05BmL9peslaCgYKAQgSARMSFQHGX2MiI8LV7XvAyfE-i0kHG2pmlQ0183; refresh_token=1//0h5fbDZoxL2ctCgYIARAAGBESNwF-L9IrlPAnnCvhJWVkQlgTmYjVkfw6kSyBAFrlpoJLedUhkGpRDuRL0S7Dn0ndnl7vL9kW4tA; scope=https://www.googleapis.com/auth/youtube-paid-content https://www.googleapis.com/auth/youtube; token_type=Bearer; expiry_date=2024-08-04T19:36:28.004Z',
     });
 
-    await this.player.extractors.loadDefault();
+    await this.player.extractors.loadDefault(function (ext) { return ext !== 'YouTubeExtractor' });
 
     // this.findAll().subscribe(({data}) => console.log(data))
 

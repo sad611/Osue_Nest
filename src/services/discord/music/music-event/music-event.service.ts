@@ -27,7 +27,6 @@ export class MusicEventService {
 
   playerListen(player: Player) {
     player.events.on('playerStart', async (queue, track) => {
-      console.log(track);
       const embed = this.embedService
         .Info({
           title: `Now Playing!`,
