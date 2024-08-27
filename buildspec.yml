@@ -4,7 +4,7 @@ phases:
     runtime-versions:
       nodejs: latest
     commands:
-      - sudo yum update
+      - yes | sudo yum update
       - sudo yum install build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev
       - npm install
       - npm install -g @nestjs/cli
