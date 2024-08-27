@@ -5,7 +5,7 @@ phases:
       nodejs: latest
     commands:
       - yes | sudo yum update
-      - sudo yum install cairo-devel libjpeg-turbo-devel giflib-devel pango-devel -y
+      $ sudo yum install gcc-c++ cairo-devel libjpeg-turbo-devel pango-devel giflib-devel -y
       - npm install
       - npm install -g @nestjs/cli
   build:
