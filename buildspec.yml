@@ -2,7 +2,7 @@ version: 0.2
 phases:
   install:
     runtime-versions:
-      nodejs: 16.14.0
+      nodejs: 20.12.2
     commands:
       - npm install
       - npm install -g @nestjs/cli
