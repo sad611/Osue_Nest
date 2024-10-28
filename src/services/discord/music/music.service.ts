@@ -17,6 +17,7 @@ import { EmbedInteractionService } from '../embed/embed-interaction/embed-intera
 import { MenuService } from '../components/menu/menu.service';
 import * as fs from 'fs';
 import { MusicEventService } from './music-event/music-event.service';
+import { HttpService } from '@nestjs/axios';
 
 const choicesSet = new Set<SearchQueryType>(['youtubeSearch', 'spotifySearch', 'soundcloudSearch']);
 
@@ -43,6 +44,7 @@ export class MusicService {
     private menuService: MenuService,
     private embedService: EmbedService,
     private musicEvent: MusicEventService,
+    private readonly httpService: HttpService,
     @Inject(forwardRef(() => EmbedInteractionService)) private embedInteraction: EmbedInteractionService,
   ) {
     this.createPlayer(client);
@@ -75,11 +77,11 @@ export class MusicService {
 
       await interaction.deferReply();
 
-      const result = await this.player.search(query, { requestedBy: interaction.user});
+      const result = await this.player.search(query, { requestedBy: interaction.user });
       if (!result.hasTracks()) {
         return interaction.followUp({ content: 'No tracks found', ephemeral: true });
       }
-      
+
       const queue =
         this.player.queues.get(interaction.guild) ||
         this.player.queues.create(interaction.guild, { metadata: { channel: interaction.channel } });
@@ -91,7 +93,6 @@ export class MusicService {
           leaveOnEnd: false,
           leaveOnStop: false,
           leaveOnEmpty: false,
-          
         },
         connectionOptions: {
           deaf: true,
@@ -420,6 +421,7 @@ export class MusicService {
       }
 
       const topResults = result.tracks.slice(0, 10);
+      console.log(topResults);
       const selectMenu = this.menuService.createStringSelectMenu(topResults);
 
       const embed1 = this.embedService
@@ -443,13 +445,12 @@ export class MusicService {
         const selectInteraction = interactionResponse as StringSelectMenuInteraction;
         const index = parseInt(selectInteraction.values[0]);
         const selectedTrack = topResults[index];
-        menuMessage.delete();
 
         const queue =
           this.player.queues.get(interaction.guild) ||
-          this.player.queues.create(interaction.guild, { metadata: { channel: channel } });
-
-        const { track } = await this.player.play(channel, selectedTrack, {
+          this.player.queues.create(interaction.guild, { metadata: { channel: interaction.channel } });
+        console.log(selectedTrack.title)
+        const { track } = await this.player.play(channel, selectedTrack.title + selectedTrack.author, {
           searchEngine: engine,
           nodeOptions: {
             volume: 0,
@@ -463,7 +464,10 @@ export class MusicService {
             deaf: true,
           },
         });
+
+        console.log({track})
         if (queue.tracks.size === 0) return interaction.deleteReply();
+        menuMessage.delete();
         const embed2 = this.embedService
           .Info({
             title: `Track queued at position #${queue.tracks.size}!`,
@@ -570,12 +574,5 @@ export class MusicService {
 
     const embed = this.embedService.Info({ title: `Joined ${member.voice.channel}!` });
     return interaction.followUp({ embeds: [embed], ephemeral: true });
-  }
-
-  @Subcommand({ name: 'test', description: 'test' })
-  public async testMusic(@Context() [interaction]: SlashCommandContext) {
-    const member = await interaction.guild.members.fetch('473268285362667522');
-    const role = await interaction.guild.roles.fetch('1253319749895585883');
-    member.roles.remove(role).then((res) => console.log(res));
   }
 }
