@@ -25,6 +25,7 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
+Lavalink.jar
 # Logs
 logs
 *.log
