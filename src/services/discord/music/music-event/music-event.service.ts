@@ -16,12 +16,12 @@ import { EmbedService } from '../../embed/embed.service';
 import { QueueUpdatesGateway } from '../../../../controller/discord/gateway/queue.gateway';
 import { OnLavalinkManager, LavalinkManagerContextOf, PlayerManager } from '@necord/lavalink';
 import { Context } from 'necord';
-import { Queue, Player, Track, LoadTypes, UnresolvedTrack, SearchPlatform } from 'lavalink-client/dist/types';
+import { Queue, Player, Track, LoadTypes, UnresolvedTrack, SearchPlatform, RepeatMode } from 'lavalink-client/dist/types';
 import { MusicService } from '../music.service';
 import { GeneralService } from '../general/general.service';
 
 export interface QueueJson {
-  current: {track: Track, time: number};
+  current: { track: Track; time: number };
   tracks: (Track | UnresolvedTrack)[];
   previous: Track;
 }
@@ -34,21 +34,21 @@ export class MusicEventService {
   private messageCache = new Map<string, Message>();
   private embedCache = new Map<string, EmbedService>();
 
-constructor(
-  private client: Client,
-  private embedService: EmbedService,
-  private generalService: GeneralService,
-  private readonly playerManager: PlayerManager,
-  @Inject(forwardRef(() => EmbedInteractionService))
-  private embedInteraction: EmbedInteractionService,
-  @Inject(forwardRef(() => QueueUpdatesGateway))
-  private gatewayService: QueueUpdatesGateway
-) {}
+  constructor(
+    private client: Client,
+    private embedService: EmbedService,
+    private generalService: GeneralService,
+    private readonly playerManager: PlayerManager,
+    @Inject(forwardRef(() => EmbedInteractionService))
+    private embedInteraction: EmbedInteractionService,
+    @Inject(forwardRef(() => QueueUpdatesGateway))
+    private gatewayService: QueueUpdatesGateway,
+  ) {}
 
   private messageLocks = new Map<string, boolean>();
 
   serialize(queue: Queue): QueueJson {
-    return { current: {track: queue.current, time: null}, previous: queue.previous[0], tracks: queue.tracks };
+    return { current: { track: queue.current, time: null }, previous: queue.previous[0], tracks: queue.tracks };
   }
 
   @OnLavalinkManager('playerCreate')
@@ -71,6 +71,7 @@ constructor(
     if (!channel) {
       console.log('No channel found for guild:', guildID);
     } else {
+      try {
       const embed = this.embedService
         .Info({
           title: `Now Playing!`,
@@ -83,7 +84,7 @@ constructor(
         })
         .withAuthor(user);
 
-      try {
+      
         const message = await channel.send({ embeds: [embed] });
         this.embedInteraction.handleInteractionGeneral(message, player, embed, track.info.duration);
         this.embedCache.set(guildID, embed);
@@ -95,7 +96,6 @@ constructor(
     }
 
     this.gatewayService.queueUpdate(player.guildId, this.serialize(player.queue));
-    // this.gatewayService.playerTimeUpdate(player.guildId, 0);
     this.logger.log(`Track started: ${track.info.title}`);
   }
 
@@ -195,7 +195,7 @@ constructor(
         .withAuthor(interaction.user);
 
     const embed = loadType === 'search' ? buildTrackEmbed(track[0] as Track) : buildPlaylistEmbed(track as Track[]);
-    this.gatewayService.queueUpdate(interaction.guildId, this.serialize(queue));
+    this.gatewayService.tracksUpdate(interaction.guildId, queue.tracks);
     interaction.followUp({ embeds: [embed] });
     return;
   }
@@ -203,17 +203,29 @@ constructor(
   async onPausedDash(event: 'pause' | 'resume', guildID: string, time?: number): Promise<void> {
     const message = this.messageCache.get(guildID);
     const embed = this.embedCache.get(guildID);
-    if (!message || !embed) return;
-
-    const player = this.playerManager.get(guildID)
+    console.log(event)
+    if (!message || !embed) {
+      console.log({ message, embed });
+      return;
+    }
+    console.log(Math.round(time * 1000) )
+    const player = this.playerManager.get(guildID);
     if (event === 'pause') {
-      await player.pause();
+      if (!player.paused)
+        await player.pause();
       embed.setTitle('Now Playing! (paused)');
     } else if (event === 'resume') {
-      await player.resume();
+      if (player.paused) {
+        player.seek(Math.round(time * 1000))
+        await player.resume();
+      }
       embed.setTitle('Now Playing!');
     }
 
     message.edit({ embeds: [embed] });
+  }
+
+  onRepeatMode(repeatMode: RepeatMode, guildID: string) {
+    const player = this.playerManager.get(guildID);
   }
 }

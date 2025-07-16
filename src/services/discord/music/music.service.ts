@@ -1,12 +1,15 @@
-import { forwardRef, Inject, Injectable, Logger, UseInterceptors } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger, UseGuards, UseInterceptors } from '@nestjs/common';
 import { Context, createCommandGroupDecorator, Options, SlashCommandContext, Subcommand } from 'necord';
 import { GuildQueuePlayerNode, Player, QueueRepeatMode, SearchQueryType, useQueue, useTimeline } from 'discord-player';
 import { lyricsExtractor } from '@discord-player/extractor';
 import { LoopDto, LyricsDto, MoveDto, MusicQueryDto } from './options/dto';
 import {
   CacheType,
+  ChannelType,
   ChatInputCommandInteraction,
   Client,
+  Guild,
+  GuildBasedChannel,
   GuildTextBasedChannel,
   Message,
   StringSelectMenuInteraction,
@@ -21,6 +24,10 @@ import { MusicEventService } from './music-event/music-event.service';
 import { HttpService } from '@nestjs/axios';
 import { NecordLavalinkService, PlayerManager } from '@necord/lavalink';
 import { GeneralService } from './general/general.service';
+import { QueueUpdatesGateway } from '../../../controller/discord/gateway/queue.gateway';
+import { MusicPreconditions } from './guards/music.preconditions.decorator';
+import { MusicCommandGuard } from './guards/music-command.guard';
+import { GuardedInteraction } from './guards/guarded-interaction.interface';
 
 const choicesSet = new Set<SearchQueryType>(['youtubeSearch', 'spotifySearch', 'soundcloudSearch']);
 
@@ -49,6 +56,7 @@ export class MusicService {
     private embedService: EmbedService,
     private musicEvent: MusicEventService,
     private readonly httpService: HttpService,
+    private gatewayService: QueueUpdatesGateway,
     @Inject(forwardRef(() => EmbedInteractionService)) private embedInteraction: EmbedInteractionService,
     private readonly playerManager: PlayerManager,
     private readonly lavalinkService: NecordLavalinkService,
@@ -68,17 +76,11 @@ export class MusicService {
     });
   }
 
+  @MusicPreconditions({ requiresSameVoiceChannel: true })
+  @UseGuards(MusicCommandGuard)
   @UseInterceptors(EngineMenuInterceptor)
   @Subcommand({ name: 'play', description: 'Queues a music' })
-  public async playMusic(@Context() [interaction]: SlashCommandContext, @Options() { query, engine }: MusicQueryDto) {
-    const member = await interaction.guild.members.fetch(interaction.user.id);
-    const channel = member.voice.channel;
-
-    await interaction.deferReply();
-
-    if (!channel)
-      return interaction.reply({ content: 'You need to be connected to a voice channel!', ephemeral: true });
-    // if (!choicesSet.has(engine)) engine = 'autoSearch' as SearchQueryType;
+  public async playMusic(@Context() [interaction]: [GuardedInteraction], @Options() { query, engine }: MusicQueryDto) {
     const player =
       this.playerManager.get(interaction.guild.id) ??
       this.playerManager.create({
@@ -111,16 +113,11 @@ export class MusicService {
     return;
   }
 
+  @MusicPreconditions({ requiresCurrentTrack: true, replyType: 'public' })
+  @UseGuards(MusicCommandGuard)
   @Subcommand({ name: 'np', description: 'The song currently playing' })
-  public async nowMusic(@Context() [interaction]: SlashCommandContext) {
-    await interaction.deferReply();
-    const player = this.playerManager.get(interaction.guild.id);
-    if (!player || !player.playing) {
-      return interaction.followUp({ content: 'There is currently no song playing', ephemeral: true });
-    }
-    if (player.paused) {
-      return interaction.followUp({ content: 'The current song on queue is paused', ephemeral: true });
-    }
+  public async nowMusic(@Context() [interaction]: [GuardedInteraction]) {
+    const player = interaction.guildPlayer!;
     const track = player.queue.current.info;
     const progressBar = this.splitBar(track.duration, player.position, 15);
 
@@ -135,21 +132,20 @@ export class MusicService {
           inline: true,
         },
       ],
+
       thumbnail: { url: track.artworkUrl },
     });
-    await interaction.editReply({ embeds: [embed] });
-    const replyMessage = await interaction.fetchReply();
-    this.embedInteraction.handleInteractionGeneral(replyMessage, player, embed, track.duration);
+
+    const message = await interaction.followUp({ embeds: [embed] });
+
+    this.embedInteraction.handleInteractionGeneral(message, player, embed, track.duration);
   }
 
+  @MusicPreconditions({ requiresCurrentTrack: true })
+  @UseGuards(MusicCommandGuard)
   @Subcommand({ name: 'skip', description: 'Skips the currently playing song' })
-  public async skipMusic(@Context() [interaction]: SlashCommandContext) {
-    await interaction.deferReply();
-
-    const player = this.playerManager.get(interaction.guild.id);
-    if (!player || !player.playing) {
-      return interaction.followUp({ content: 'There is currently no song playing', ephemeral: true });
-    }
+  public async skipMusic(@Context() [interaction]: [GuardedInteraction]) {
+    const player = interaction.guildPlayer;
 
     const track = player.queue.current;
 
@@ -167,32 +163,32 @@ export class MusicService {
     return interaction.followUp({ content: `Song skipped: ${track.info.title}` });
   }
 
+  @MusicPreconditions({ requiresPlayer: true })
+  @UseGuards(MusicCommandGuard)
   @Subcommand({ name: 'queue', description: 'Display this guild music queue' })
-  public async queueMusic(@Context() [interaction]: SlashCommandContext) {
-    await interaction.deferReply();
-
-    const player = this.playerManager.get(interaction.guild.id);
-    if (!player || !player.playing) {
-      return interaction.followUp({ content: 'There is currently no song playing', ephemeral: true });
-    }
+  public async queueMusic(@Context() [interaction]: [GuardedInteraction]) {
+    const player = interaction.guildPlayer;
 
     const tracks = player.queue.tracks;
-    console.log(tracks);
+
+    if (!tracks || tracks.length === 0) {
+      const embed = this.embedService.Info({
+        title: 'Empty queue',
+        description: `There's no tracks in the queue`,
+      });
+      return interaction.followUp({ embeds: [embed], ephemeral: true });
+    }
+
     interaction.deleteReply();
     await this.embedInteraction.handleInteractionQueue(interaction.channel, tracks, interaction.user);
   }
 
   @UseInterceptors(LoopMenuInterceptor)
+  @MusicPreconditions({ requiresPlayer: true, replyType: 'public' })
+  @UseGuards(MusicCommandGuard)
   @Subcommand({ name: 'loop', description: 'Loops queue or current song' })
-  public async loopMusic(@Context() [interaction]: SlashCommandContext, @Options() { loop }: LoopDto) {
-    const player = this.playerManager.get(interaction.guild.id);
-
-    await interaction.deferReply();
-    if (!player.playing) {
-      const embed = this.embedService.Info({ title: 'Not playing', description: `I'm currently not playing anything` });
-      return interaction.followUp({ embeds: [embed], ephemeral: true });
-    }
-
+  public async loopMusic(@Context() [interaction]: [GuardedInteraction], @Options() { loop }: LoopDto) {
+    const player = interaction.guildPlayer;
     if (!loop) loop = 'queue';
 
     if (player.repeatMode !== 'off') loop = 'off';
@@ -203,11 +199,11 @@ export class MusicService {
     return interaction.followUp({ embeds: [embed] });
   }
 
+  @MusicPreconditions({ requiresPlayerPlaying: true })
+  @UseGuards(MusicCommandGuard)
   @Subcommand({ name: 'pause', description: 'Pauses the player' })
-  public async pauseMusic(@Context() [interaction]: SlashCommandContext) {
-    const player = this.playerManager.get(interaction.guild.id);
-
-    await interaction.deferReply({ ephemeral: true });
+  public async pauseMusic(@Context() [interaction]: [GuardedInteraction]) {
+    const player = interaction.guildPlayer;
 
     if (!player.playing) {
       const embed = this.embedService.Info({ title: 'Not playing', description: `I'm currently not playing anything` });
@@ -226,63 +222,38 @@ export class MusicService {
     }
 
     const embed = this.embedService.Info({ title: action }).withAuthor(interaction.user);
-    await interaction.followUp({ embeds: [embed], ephemeral: true });
+    await interaction.followUp({ embeds: [embed] });
   }
 
+  @MusicPreconditions({ requiresPlayerPaused: true })
+  @UseGuards(MusicCommandGuard)
   @Subcommand({ name: 'resume', description: 'Resumes the player' })
-  public async resumeMusic(@Context() [interaction]: SlashCommandContext) {
-    const player = this.playerManager.get(interaction.guild.id);
-
-    await interaction.deferReply({ ephemeral: true });
-
-    if (!player.playing) {
-      const embed = this.embedService.Info({ title: 'Not playing', description: `I'm currently not playing anything` });
-      return interaction.followUp({ embeds: [embed], ephemeral: true });
-    }
-
-    if (!player.paused) {
-      const embed = this.embedService.Info({ title: `I'm already playing` }).withAuthor(interaction.user);
-      return interaction.followUp({ embeds: [embed], ephemeral: true });
-    }
+  public async resumeMusic(@Context() [interaction]: [GuardedInteraction]) {
+    const player = interaction.guildPlayer;
 
     player.resume();
     // const embed = this.embedService.Info({ title: 'Resumed' }).withAuthor(interaction.user);
   }
 
+  @MusicPreconditions({ requiresQueueNotEmpty: true })
+  @UseGuards(MusicCommandGuard)
   @Subcommand({ name: 'shuffle', description: 'Shuffles the queue' })
-  public async shuffleMusic(@Context() [interaction]: SlashCommandContext) {
-    const player = this.playerManager.get(interaction.guildId);
-
-    await interaction.deferReply({ ephemeral: true });
-
-    if (!player.queue.tracks) {
-      const embed = this.embedService.Info({
-        title: 'Empty queue',
-        description: `There's no tracks in the queue to shuffle`,
-      });
-      return interaction.followUp({ embeds: [embed], ephemeral: true });
-    }
+  public async shuffleMusic(@Context() [interaction]: [GuardedInteraction]) {
+    const player = interaction.guildPlayer;
 
     player.queue.shuffle();
 
+    this.gatewayService.tracksUpdate(interaction.guildId, player.queue.tracks);
     const embed = this.embedService.Info({ title: 'Queue shuffled' }).withAuthor(interaction.user);
 
     return interaction.followUp({ embeds: [embed], ephemeral: true });
   }
 
+  @MusicPreconditions({ requiresQueueNotEmpty: true })
+  @UseGuards(MusicCommandGuard)
   @Subcommand({ name: 'move', description: 'Moves the track to a position (head of the queue if no second argument)' })
-  public async moveMusic(@Context() [interaction]: SlashCommandContext, @Options() { from, to }: MoveDto) {
-    const player = this.playerManager.get(interaction.guildId);
-
-    await interaction.deferReply({ ephemeral: true });
-
-    if (!player.queue?.tracks || player.queue.tracks.length === 0) {
-      const embed = this.embedService.Info({
-        title: 'Empty queue',
-        description: `There are no tracks in the queue to move.`,
-      });
-      return interaction.followUp({ embeds: [embed], ephemeral: true });
-    }
+  public async moveMusic(@Context() [interaction]: [GuardedInteraction], @Options() { from, to }: MoveDto) {
+    const player = interaction.guildPlayer;
 
     if (from < 1 || from > player.queue.tracks.length) {
       const embed = this.embedService.Info({
@@ -294,7 +265,7 @@ export class MusicService {
 
     if (to === null) to = 1;
 
-    if (to < 1 || to > player.queue.tracks.length + 1) {
+    if (to < 1 || to > player.queue.tracks.length) {
       const embed = this.embedService.Info({
         title: 'Invalid position',
         description: `The 'to' position ${to} is out of bounds.`,
@@ -304,8 +275,12 @@ export class MusicService {
 
     const fromIndex = from - 1;
     const toIndex = to - 1;
-    const track = player.queue.tracks.at(fromIndex);
+
+    const [track] = player.queue.tracks.splice(fromIndex, 1);
+
     player.queue.tracks.splice(toIndex, 0, track);
+
+    this.gatewayService.tracksUpdate(interaction.guildId, player.queue.tracks);
     const embed = this.embedService
       .Info({
         title: 'Track moved',
@@ -316,22 +291,11 @@ export class MusicService {
     return interaction.followUp({ embeds: [embed], ephemeral: true });
   }
 
+  @MusicPreconditions({ requiresSameVoiceChannel: true })
+  @UseGuards(MusicCommandGuard)
   @Subcommand({ name: 'leave', description: 'Leaves the voice channel' })
-  public async leaveMusic(@Context() [interaction]: SlashCommandContext, @Options() { from, to }: MoveDto) {
-    const player = this.playerManager.get(interaction.guildId);
-
-    await interaction.deferReply();
-
-    if (!player) {
-      const embed = this.embedService
-        .Info({
-          title: 'Not playing',
-          description: 'I am not playing anything right now',
-        })
-        .withAuthor(interaction.user);
-
-      return interaction.followUp({ embeds: [embed] });
-    }
+  public async leaveMusic(@Context() [interaction]: [GuardedInteraction]) {
+    const player = interaction.guildPlayer;
 
     player.disconnect();
     player.destroy();
@@ -346,32 +310,11 @@ export class MusicService {
     return interaction.followUp({ embeds: [embed] });
   }
 
+  @MusicPreconditions({ requiresQueueNotEmpty: true })
+  @UseGuards(MusicCommandGuard)
   @Subcommand({ name: 'clear', description: 'Clear the queue' })
-  public async clearMusic(@Context() [interaction]: SlashCommandContext, @Options() MoveDto) {
-    await interaction.deferReply();
-
-    const player = this.playerManager.get(interaction.guildId);
-
-    if (!player) {
-      const embed = this.embedService
-        .Info({
-          title: 'Not playing',
-          description: 'I am not playing anything right now',
-        })
-        .withAuthor(interaction.user);
-
-      return interaction.followUp({ embeds: [embed] });
-    }
-
-    if (!player.queue.tracks) {
-      const embed = this.embedService
-        .Info({
-          title: 'No music in queue!',
-        })
-        .withAuthor(interaction.user);
-
-      return interaction.followUp({ embeds: [embed] });
-    }
+  public async clearMusic(@Context() [interaction]: [GuardedInteraction], @Options() MoveDto) {
+    const player = interaction.guildPlayer;
 
     player.queue.tracks.splice(0, player.queue.tracks.length);
 
@@ -380,22 +323,16 @@ export class MusicService {
         title: 'Queue cleared!',
       })
       .withAuthor(interaction.user);
-    
+
     return interaction.followUp({ embeds: [embed] });
   }
 
+  @MusicPreconditions({ requiresSameVoiceChannel: true, replyType: 'public' })
+  @UseGuards(MusicCommandGuard)
   @UseInterceptors(EngineMenuInterceptor)
   @Subcommand({ name: 'search', description: 'Searches a music' })
-  public async searchMusic(@Context() [interaction]: SlashCommandContext, @Options() { query }: MusicQueryDto) {
+  public async searchMusic(@Context() [interaction]: [GuardedInteraction], @Options() { query }: MusicQueryDto) {
     try {
-      const member = await interaction.guild.members.fetch(interaction.user.id);
-      const channel = member.voice.channel;
-      if (!channel) {
-        return interaction.followUp({ content: 'You must be in a voice channel.', ephemeral: true });
-      }
-
-      await interaction.deferReply();
-
       const player =
         this.playerManager.get(interaction.guild.id) ??
         this.playerManager.create({
@@ -407,13 +344,14 @@ export class MusicService {
 
       const res = await player.search({ query }, interaction.user);
       if (!res.tracks || res.tracks.length === 0) {
-        return interaction.followUp({ content: 'No tracks found', ephemeral: true });
+        return interaction.editReply({ content: 'No tracks found' });
       }
+
       const topResults = res.tracks.slice(0, 10);
       const selectMenu = this.menuService.createStringSelectMenu(topResults);
       const embed = this.embedService.Info({ title: 'These are the top results!' }).withAuthor(interaction.user);
 
-      const menuMessage = await interaction.followUp({
+      const menuMessage = await interaction.editReply({
         content: 'Select a track:',
         embeds: [embed],
         components: [selectMenu],
@@ -421,22 +359,26 @@ export class MusicService {
 
       let selectInteraction: StringSelectMenuInteraction;
       try {
-        const interactionResponse = await interaction.channel.awaitMessageComponent({
-          filter: (i) => i.isMessageComponent() && i.customId === 'search-menu',
+        const interactionResponse = await menuMessage.awaitMessageComponent({
+          filter: (i) => i.isMessageComponent() && i.customId === 'search-menu' && i.user.id === interaction.user.id,
           time: 60000,
         });
         selectInteraction = interactionResponse as StringSelectMenuInteraction;
       } catch (timeoutError) {
-        await menuMessage.delete();
-        return interaction.followUp({ content: 'No track selected within the time limit', ephemeral: true });
+        await interaction.editReply({
+          content: 'No track selected within the time limit.',
+          embeds: [],
+          components: [],
+        });
+        return;
       }
 
       const index = parseInt(selectInteraction.values[0], 10);
       const selectedTrack = topResults[index];
       if (!selectedTrack) {
-        return interaction.followUp({ content: 'Invalid track selection', ephemeral: true });
+        await interaction.editReply({ content: 'Invalid track selection.', embeds: [], components: [] });
+        return;
       }
-      console.log(selectedTrack.info.title);
 
       if (!player.connected) {
         await player.connect();
@@ -446,33 +388,45 @@ export class MusicService {
       if (!player.playing) {
         await player.play();
       }
+      await selectInteraction.update({
+        content: `✅ Queued **${selectedTrack.info.title}**`,
+        embeds: [],
+        components: [],
+      });
 
       if (player.queue.tracks.length !== 0) {
         this.musicEvent.onTrackAdded(res.tracks, interaction, res.loadType, player.queue);
       }
-
-      // await interaction.deleteReply();
-      await menuMessage.delete();
     } catch (err) {
       console.error(err);
-      return interaction.followUp({ content: 'An error occurred while processing your request.', ephemeral: true });
+      if (!interaction.replied) {
+        await interaction.editReply({ content: 'An error occurred while processing your request.' });
+      } else {
+        await interaction.followUp({ content: 'An error occurred while processing your request.', ephemeral: true });
+      }
     }
   }
 
+  @MusicPreconditions({ requiresCurrentTrack: true, replyType: 'public' })
+  @UseGuards(MusicCommandGuard)
   @Subcommand({ name: 'lyrics', description: 'Lyrics of a song' }) //@Options() { query }: LyricsDto
-  public async lyricsMusic(@Context() [interaction]: SlashCommandContext) {
-    await interaction.deferReply();
-
-    const player = this.playerManager.get(interaction.guildId);
-
-    if (!player.playing) {
-      const embed = this.embedService.Info({ title: 'Not playing', description: `I'm currently not playing anything` });
-      return interaction.followUp({ embeds: [embed], ephemeral: true });
-    }
+  public async lyricsMusic(@Context() [interaction]: [GuardedInteraction]) {
+    return;
+    const player = interaction.guildPlayer;
     try {
       const track = player.queue.current;
-      const lyrics = await player.getLyrics(track);
-      this.embedInteraction.handleInteractionLyrics(interaction.channel, lyrics.lines, track.info, interaction.user);
+      const lyrics = await player.getLyrics(track, true);
+
+      if (!lyrics) return;
+
+      const currentTime = track.info.duration - player.position;
+      this.embedInteraction.handleInteractionLyrics(
+        interaction.channel,
+        lyrics.lines,
+        track.info,
+        currentTime,
+        interaction.user,
+      );
       interaction.deleteReply();
     } catch (err) {
       console.error(err);
@@ -480,45 +434,22 @@ export class MusicService {
     }
   }
 
+  @MusicPreconditions({ requiresSameVoiceChannel: true })
+  @UseGuards(MusicCommandGuard)
   @Subcommand({ name: 'disconnect', description: 'Disconnect from channel' })
-  public async disconnectMusic(@Context() [interaction]: SlashCommandContext) {
-    const player = this.playerManager.get(interaction.guildId);
-    await interaction.deferReply({ ephemeral: true });
-    if (!player) {
-      const embed = this.embedService.Info({
-        title: 'Not in channel',
-        description: `I'm currently not in any channel`,
-      });
-      return interaction.followUp({ embeds: [embed], ephemeral: true });
-    }
-
-    const member = await interaction.guild.members.fetch(interaction.user.id);
-
-    if (member.voice.channel.id !== player.voiceChannelId) {
-      const embed = this.embedService.Info({
-        title: 'Not in channel',
-        description: `You need to be in the same voice channel as the Bot to use this command`,
-      });
-      return interaction.followUp({ embeds: [embed], ephemeral: true });
-    }
+  public async disconnectMusic(@Context() [interaction]: [GuardedInteraction]) {
+    const player = interaction.guildPlayer;
 
     const embed = this.embedService.Info({ title: 'Left voice channel!' });
     player.disconnect();
     return interaction.followUp({ embeds: [embed], ephemeral: true });
   }
 
+  @MusicPreconditions({ requiresVoiceChannel: true, requiresPlayer: false })
+  @UseGuards(MusicCommandGuard)
   @Subcommand({ name: 'join', description: 'Joins a voice channel' })
-  public async joinMusic(@Context() [interaction]: SlashCommandContext) {
-    await interaction.deferReply({ ephemeral: true });
-
-    let player = this.playerManager.get(interaction.guild.id);
-
-    if (player && player.playing) {
-      const embed = this.embedService.Info({
-        title: 'Already playing in another channel',
-      });
-      return interaction.followUp({ embeds: [embed], ephemeral: true });
-    }
+  public async joinMusic(@Context() [interaction]: [GuardedInteraction]) {
+    let player = interaction.guildPlayer;
 
     if (!player) {
       player = this.playerManager.create({
@@ -529,20 +460,21 @@ export class MusicService {
       });
     }
 
-    const member = await interaction.guild.members.fetch(interaction.user.id);
-    if (!member.voice.channel) {
-      const embed = this.embedService.Info({
-        title: 'User not in channel',
-      });
-      return interaction.followUp({ embeds: [embed], ephemeral: true });
-    }
-
     await player.connect();
 
+    // console.log(interaction.memberVoiceChannel);
+
     const embed = this.embedService.Info({
-      title: `Joined ${member.voice.channel}!`,
+      title: `Joined ${interaction.memberVoiceChannel}!`,
     });
     return interaction.followUp({ embeds: [embed], ephemeral: true });
+  }
+
+  @MusicPreconditions({ requiresSameVoiceChannel: true })
+  @UseGuards(MusicCommandGuard)
+  @Subcommand({ name: 'teste', description: 'Joins a voice channel' })
+  public async testeMusic(@Context() [interaction]: SlashCommandContext) {
+    return;
   }
 
   splitBar(duration: number, position: number, barLength: number): string {

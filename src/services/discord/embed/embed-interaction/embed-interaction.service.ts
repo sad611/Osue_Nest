@@ -183,6 +183,7 @@ export class EmbedInteractionService {
     channel: GuildTextBasedChannel,
     lyrics: LyricsResult['lines'],
     track: Track['info'],
+    time: number,
     author: User,
   ): Promise<void> {
     let curPage = 1;
@@ -206,15 +207,14 @@ export class EmbedInteractionService {
       const row = this.createButtonRowQueue(page, lyrics.length, sliceLength);
       return await channel.send({ embeds: [embed], components: [row] });
     };
-  
-    // Envia a primeira página
+
+
     const interactionResponse = await sendLyricsPage(curPage);
     const collector = interactionResponse.createMessageComponentCollector({
-      idle: 45000,
-      time: 120000,
+      idle: time,
+      time: time,
     });
   
-    // Manipulador de eventos do coletor
     collector.on('collect', async (e) => {
       switch (e.customId) {
         case 'first-page':

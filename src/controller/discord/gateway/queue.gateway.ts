@@ -9,6 +9,7 @@ import {
   WsResponse,
 } from '@nestjs/websockets';
 
+import { Queue, Player, Track, LoadTypes, UnresolvedTrack, SearchPlatform, RepeatMode } from 'lavalink-client/dist/types';
 import { Server, Socket } from 'socket.io';
 import { GuildQueue, useQueue } from 'discord-player';
 import { MusicEventService, QueueJson } from '../../../services/discord/music/music-event/music-event.service'
@@ -53,11 +54,25 @@ export class QueueUpdatesGateway implements OnGatewayConnection, OnGatewayDiscon
   }
 
   @SubscribeMessage('resume')
-  async handleResume(@MessageBody() data: {event: 'pause' | 'resume', guildID: string, time: number}): Promise<void> {
+  async handleResume(@MessageBody() data: {event: 'pause' | 'resume', guildID: string, time: number}, @ConnectedSocket() client: Socket): Promise<void> {
     const { guildID, time, event } = data;
-    console.log(data)
-
     this.musicEventService.onPausedDash(event, guildID, time)
+    client.broadcast.emit(`playerResume:${guildID}`, {event: event})
+  }
+
+  @SubscribeMessage('pause')
+  async handlePause(@MessageBody() data: {event: 'pause' | 'resume', guildID: string, time: number}, @ConnectedSocket() client: Socket): Promise<void> {
+    const { guildID, event} = data;
+    console.log('evento de pausaaaaaaaaaaaaar')
+    this.musicEventService.onPausedDash(event, guildID)
+    client.broadcast.emit(`playerPause:${guildID}`, {event: event})
+  }
+
+  @SubscribeMessage('repeatMode')
+  async handleRepeat(@MessageBody() data: {event: 'repeatMode', repeatMode: RepeatMode, guildID: string}, @ConnectedSocket() client: Socket): Promise<void> {
+    const { guildID, event} = data;
+    
+    client.broadcast.emit(`playerPause:${guildID}`, {event: event})
   }
 
   @SubscribeMessage('getQueue')
@@ -84,5 +99,9 @@ export class QueueUpdatesGateway implements OnGatewayConnection, OnGatewayDiscon
   
   queueUpdate(id: string, queue: QueueJson) {
     this.server.emit(`queueUpdate:${id}`, queue)
+  }
+
+  tracksUpdate(id: string, tracks: (Track | UnresolvedTrack)[]) {
+    this.server.emit(`tracksUpdate:${id}`, tracks)
   }
 }

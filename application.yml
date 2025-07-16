@@ -4,6 +4,12 @@ server: # REST and WS server
   http2:
     enabled: false # Whether to enable HTTP/2 support
 plugins:
+  lavalyrics:
+    sources: 
+      - deezer
+      - spotify
+      - youtube
+      - yandexMusic
   lavasrc:
     providers:
       - "ytsearch:\"%ISRC%\""
@@ -18,41 +24,46 @@ plugins:
       spotify: true # Enable Spotify lyrics source
       youtube: true # Enable YouTube lyrics source
     spotify:
-      clientId: "ceeb1431ab3d42ca9bd35eb45935c8ed"
-      clientSecret: "45319eeb5967428aac1fb682d1ce42cd"
-      spDc: "AQCLXeBarqhJLR3x2MR2TIzPm9uKQjiGhX_lDvFaUSNo6Ri6MjwJOzHvcMdsv_oF0KOtlAjjvzhm6vJz1JqDo63kLGxW-wkJoHVlguicoHcPPlMQ3bvcxd8Bf6bCmMaFlEMtsmPRoGLg5DwuLp_uRfZB8J_08JI"
+      clientId: ""
+      clientSecret: ""
+      spDc: ""
       countryCode: "US"
       playlistLoadLimit: 3 # The number of pages at 100 tracks each
       albumLoadLimit: 6 # The number of pages at 50 tracks each
-      
   youtube:
+    countryCode: "US" # the country code you want to use for searching & lyrics. See https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2
+    language: "en" # the language code you want to use for searching & lyrics. See https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes
     enabled: true # Whether this source can be used.
     allowSearch: true # Whether "ytsearch:" and "ytmsearch:" can be used.
     allowDirectVideoIds: true # Whether just video IDs can match. If false, only complete URLs will be loaded.
     allowDirectPlaylistIds: true # Whether just playlist IDs can match. If false, only complete URLs will be loaded.
     # The clients to use for track loading. See below for a list of valid clients.
     # Clients are queried in the order they are given (so the first client is queried first and so on...)
+    oauth:
+      # setting "enabled: true" is the bare minimum to get OAuth working.
+      enabled: true
+      refreshToken: ""
     clients:
+      - TVHTML5EMBEDDED
       - MUSIC
       - ANDROID_VR
       - WEB
       - WEBEMBEDDED 
 lavalink:
   plugins:
-    - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.4.1" # LavaSrc - extra sources like deezer, spotify, etc. https://github.com/topi314/LavaSrc
-      repository: "https://maven.lavalink.dev/releases"
-    - dependency: "com.github.topi314.lavasearch:lavasearch-plugin:1.0.0" # https://github.com/topi314/LavaSearch
-      repository: "https://maven.lavalink.dev/releases"
-    - dependency: "com.dunctebot:skybot-lavalink-plugin:1.7.0" # https://github.com/DuncteBot/skybot-lavalink-plugin
-      repository: "https://maven.lavalink.dev/releases"
-    - dependency: "com.github.devoxin:lavadspx-plugin:0.0.5" # https://github.com/devoxin/LavaDSPX-Plugin
+    - dependency: "com.github.topi314.lavalyrics:lavalyrics-plugin:7d60077"
+      repository: "https://maven.lavalink.dev/snapshots"
+      snapshot: true # set to true if you want to use snapshot builds (see below)
+    - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:1abc5d6"
       repository: "https://jitpack.io"
-    - dependency: "dev.lavalink.youtube:youtube-plugin:1.11.4" # https://github.com/lavalink-devs/youtube-source
+    - dependency: "com.github.topi314.lavasearch:lavasearch-plugin:1.0.0"
+      repository: "https://maven.lavalink.dev/releases"
+    - dependency: "dev.lavalink.youtube:youtube-plugin:1.13.3"
       snapshot: false
-    - dependency: "com.github.topi314.lavalyrics:lavalyrics-plugin:1.0.0" # https://github.com/topi314/LavaLyrics
-      repository: "https://maven.lavalink.dev/releases"
-    - dependency: "me.duncte123:java-lyrics-plugin:1.6.5" # https://github.com/DuncteBot/java-timed-lyrics
-      repository: "https://maven.lavalink.dev/releases"
+    # - dependency: "me.duncte123:java-lyrics-plugin:1.6.5" # <-- COMMENTED OUT
+    #   repository: "https://jitpack.io"
+    # - dependency: "com.github.topi314.lavalyrics:lavalyrics-plugin:7d60077" # <-- KEEP THIS
+    #   repository: "https://jitpack.io"
   server:
     password: "senha"
     sources:

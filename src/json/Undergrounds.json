@@ -27,6 +27,19 @@
 	},
 	{
 		"guildID":"636913623582769172",
+		"joinedTimestamp":1571922441147,
+		"lastMessageChannelID":null,
+		"premiumSinceTimestamp":0,
+		"deleted":false,
+		"nickname":"aspekt",
+		"userID":"507299533034749953",
+		"displayName":"aspekt",
+        "userName":"aspekt",
+        "aniverDay":7,
+        "aniverMonth":2
+	},
+	{
+		"guildID":"636913623582769172",
 		"joinedTimestamp":1571971741575,
 		"lastMessageChannelID":null,
 		"premiumSinceTimestamp":0,
@@ -315,7 +328,7 @@
 		"nickname":"p🐰m",
 		"userID":"559140937431777291",
 		"displayName":"p🐰m",
-        "userName":"pam",
+        "userName":"chantre",
         "aniverDay":28,
         "aniverMonth":4
 	},
